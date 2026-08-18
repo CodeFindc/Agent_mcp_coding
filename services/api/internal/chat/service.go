@@ -136,24 +136,8 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 	}
 	emit(Event{Type: "user_message", MessageID: userMsg.ID, Content: content, ThreadID: thread.ID})
 
-	// ensure runtime for this project
-	rtStatus, err := s.runtime.Status(userID)
-	if err != nil {
-		return err
-	}
-	if rtStatus.ActiveProjectID == nil || *rtStatus.ActiveProjectID != project.ID {
-		if _, err := s.runtime.ActivateProject(userID, project.ID); err != nil {
-			emit(Event{Type: "error", Error: err.Error()})
-			return err
-		}
-	} else if rtStatus.Status != models.RuntimeRunning {
-		if _, err := s.runtime.Start(userID); err != nil {
-			emit(Event{Type: "error", Error: err.Error()})
-			return err
-		}
-	}
-
-	_, endpoint, token, err := s.runtime.EnsureRunning(userID)
+	// Ensure only this project's container is up; other projects keep running.
+	_, endpoint, token, err := s.runtime.EnsureRunning(userID, project.ID)
 	if err != nil {
 		emit(Event{Type: "error", Error: err.Error()})
 		return err

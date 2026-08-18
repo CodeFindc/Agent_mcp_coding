@@ -19,7 +19,10 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrNoActiveProject = errors.New("no active project")
+var (
+	ErrNoActiveProject = errors.New("no active project")
+	ErrQuotaExceeded   = errors.New("running runtime quota exceeded for user")
+)
 
 type Service struct {
 	db       *gorm.DB
@@ -30,18 +33,23 @@ type Service struct {
 }
 
 type StatusView struct {
-	Status          models.RuntimeStatus `json:"status"`
-	ActiveProjectID *uint                `json:"activeProjectId"`
-	ContainerName   string               `json:"containerName"`
-	LastError       string               `json:"lastError"`
-	LastActiveAt    *time.Time           `json:"lastActiveAt"`
-	MCPReady        bool                 `json:"mcpReady"`
+	ProjectID     uint                  `json:"projectId"`
+	Status        models.RuntimeStatus  `json:"status"`
+	ContainerName string                `json:"containerName"`
+	LastError     string                `json:"lastError"`
+	LastActiveAt  *time.Time            `json:"lastActiveAt"`
+	MCPReady      bool                  `json:"mcpReady"`
+}
+
+type SummaryView struct {
+	Running   int          `json:"running"`
+	Limit     int          `json:"limit"`
+	Runtimes  []StatusView `json:"runtimes"`
 }
 
 func NewService(db *gorm.DB, cfg config.Config, projectsSvc *projects.Service) (*Service, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		// allow API to boot without docker; runtime ops will fail clearly
 		cli = nil
 	}
 	return &Service{
@@ -53,9 +61,16 @@ func NewService(db *gorm.DB, cfg config.Config, projectsSvc *projects.Service) (
 	}, nil
 }
 
-func (s *Service) GetOrCreate(userID uint) (*models.WorkspaceRuntime, error) {
+func containerName(userID, projectID uint) string {
+	return fmt.Sprintf("ctm-u%d-p%d", userID, projectID)
+}
+
+func (s *Service) GetOrCreate(userID, projectID uint) (*models.WorkspaceRuntime, error) {
+	if _, err := s.projects.Get(userID, projectID); err != nil {
+		return nil, err
+	}
 	var rt models.WorkspaceRuntime
-	err := s.db.Where("user_id = ?", userID).First(&rt).Error
+	err := s.db.Where("user_id = ? AND project_id = ?", userID, projectID).First(&rt).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		token, err := crypto.RandomToken(32)
 		if err != nil {
@@ -67,8 +82,9 @@ func (s *Service) GetOrCreate(userID uint) (*models.WorkspaceRuntime, error) {
 		}
 		rt = models.WorkspaceRuntime{
 			UserID:        userID,
+			ProjectID:     projectID,
 			Status:        models.RuntimeStopped,
-			ContainerName: fmt.Sprintf("ctm-u%d", userID),
+			ContainerName: containerName(userID, projectID),
 			MCPTokenEnc:   enc,
 		}
 		if err = s.db.Create(&rt).Error; err != nil {
@@ -79,70 +95,114 @@ func (s *Service) GetOrCreate(userID uint) (*models.WorkspaceRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rt.ContainerName == "" {
+		rt.ContainerName = containerName(userID, projectID)
+		_ = s.db.Model(&rt).Update("container_name", rt.ContainerName).Error
+	}
 	return &rt, nil
 }
 
-func (s *Service) Status(userID uint) (*StatusView, error) {
-	rt, err := s.GetOrCreate(userID)
+func (s *Service) Status(userID, projectID uint) (*StatusView, error) {
+	rt, err := s.GetOrCreate(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
+	return s.toStatusView(rt), nil
+}
+
+func (s *Service) List(userID uint) (*SummaryView, error) {
+	var items []models.WorkspaceRuntime
+	if err := s.db.Where("user_id = ?", userID).Order("project_id asc").Find(&items).Error; err != nil {
+		return nil, err
+	}
+	views := make([]StatusView, 0, len(items))
+	running := 0
+	for i := range items {
+		v := s.toStatusView(&items[i])
+		if v.Status == models.RuntimeRunning {
+			running++
+		}
+		views = append(views, *v)
+	}
+	limit := s.cfg.MaxRunningRuntimesPerUser
+	if limit <= 0 {
+		limit = 3
+	}
+	return &SummaryView{Running: running, Limit: limit, Runtimes: views}, nil
+}
+
+func (s *Service) toStatusView(rt *models.WorkspaceRuntime) *StatusView {
 	view := &StatusView{
-		Status:          rt.Status,
-		ActiveProjectID: rt.ActiveProjectID,
-		ContainerName:   rt.ContainerName,
-		LastError:       rt.LastError,
-		LastActiveAt:    rt.LastActiveAt,
+		ProjectID:     rt.ProjectID,
+		Status:        rt.Status,
+		ContainerName: rt.ContainerName,
+		LastError:     rt.LastError,
+		LastActiveAt:  rt.LastActiveAt,
 	}
 	if rt.Status == models.RuntimeRunning && s.docker != nil {
-		token, _ := s.plainToken(rt)
-		base := s.mcpURL(rt)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := s.mcp.Ping(ctx, base, token); err == nil {
-			view.MCPReady = true
+		token, err := s.plainToken(rt)
+		if err == nil {
+			endpoint := s.mcpURL(rt)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := s.mcp.Ping(ctx, endpoint, token); err == nil {
+				view.MCPReady = true
+			}
 		}
 	}
-	return view, nil
+	return view
 }
 
-func (s *Service) ActivateProject(userID, projectID uint) (*StatusView, error) {
-	if _, err := s.projects.Get(userID, projectID); err != nil {
-		return nil, err
-	}
-	rt, err := s.GetOrCreate(userID)
-	if err != nil {
-		return nil, err
-	}
-	needRestart := rt.ActiveProjectID == nil || *rt.ActiveProjectID != projectID || rt.Status == models.RuntimeRunning
-	if err := s.db.Model(rt).Updates(map[string]any{
-		"active_project_id": projectID,
-	}).Error; err != nil {
-		return nil, err
-	}
-	rt.ActiveProjectID = &projectID
-	if needRestart {
-		_ = s.Stop(userID)
-		return s.Start(userID)
-	}
-	return s.Status(userID)
+func (s *Service) countRunning(userID uint) (int64, error) {
+	var n int64
+	err := s.db.Model(&models.WorkspaceRuntime{}).
+		Where("user_id = ? AND status = ?", userID, models.RuntimeRunning).
+		Count(&n).Error
+	return n, err
 }
 
-func (s *Service) Start(userID uint) (*StatusView, error) {
+func (s *Service) Start(userID, projectID uint) (*StatusView, error) {
 	if s.docker == nil {
 		return nil, fmt.Errorf("docker client unavailable; is Docker running?")
 	}
-	rt, err := s.GetOrCreate(userID)
+	project, err := s.projects.Get(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
-	if rt.ActiveProjectID == nil {
-		return nil, ErrNoActiveProject
-	}
-	project, err := s.projects.Get(userID, *rt.ActiveProjectID)
+	rt, err := s.GetOrCreate(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Already running: touch activity and return.
+	if rt.Status == models.RuntimeRunning && rt.ContainerID != "" {
+		now := time.Now()
+		_ = s.db.Model(rt).Update("last_active_at", now).Error
+		view := s.toStatusView(rt)
+		if view.MCPReady {
+			return view, nil
+		}
+		// stale running row — fall through to recreate
+		_ = s.Stop(userID, projectID)
+		rt, err = s.GetOrCreate(userID, projectID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	running, err := s.countRunning(userID)
+	if err != nil {
+		return nil, err
+	}
+	limit := s.cfg.MaxRunningRuntimesPerUser
+	if limit <= 0 {
+		limit = 3
+	}
+	// if this runtime is not already counted as running, enforce quota
+	if rt.Status != models.RuntimeRunning && int(running) >= limit {
+		return nil, fmt.Errorf("%w: limit=%d", ErrQuotaExceeded, limit)
+	}
+
 	absPath, err := s.projects.AbsolutePath(project)
 	if err != nil {
 		return nil, err
@@ -160,7 +220,9 @@ func (s *Service) Start(userID uint) (*StatusView, error) {
 	if err := s.ensureNetwork(ctx); err != nil {
 		return s.fail(rt, err)
 	}
-	// remove existing container with same name
+
+	// Remove legacy single-user container name if present.
+	_ = s.removeContainer(ctx, fmt.Sprintf("ctm-u%d", userID))
 	_ = s.removeContainer(ctx, rt.ContainerName)
 
 	token, err := s.plainToken(rt)
@@ -180,8 +242,9 @@ func (s *Service) Start(userID uint) (*StatusView, error) {
 			"CODING_TOOLS_MCP_GENERATE_AUTH_TOKEN=0",
 		},
 		Labels: map[string]string{
-			"app":                       "coding-agent-platform",
-			"coding-agent-platform.user": fmt.Sprintf("%d", userID),
+			"app":                         "coding-agent-platform",
+			"coding-agent-platform.user":  fmt.Sprintf("%d", userID),
+			"coding-agent-platform.project": fmt.Sprintf("%d", projectID),
 		},
 	}, &container.HostConfig{
 		Binds: []string{fmt.Sprintf("%s:/workspace", absPath)},
@@ -202,11 +265,7 @@ func (s *Service) Start(userID uint) (*StatusView, error) {
 		return s.fail(rt, fmt.Errorf("start container: %w", err))
 	}
 
-	// wait for MCP
-	base := fmt.Sprintf("http://%s:8765/mcp", rt.ContainerName)
-	// when API runs on host, use localhost published port fallback via docker inspect + bridge IP
 	endpoint := s.resolveEndpoint(ctx, resp.ID, rt.ContainerName)
-	_ = base
 	ready := false
 	var lastErr error
 	for i := 0; i < 30; i++ {
@@ -219,6 +278,7 @@ func (s *Service) Start(userID uint) (*StatusView, error) {
 		}
 		time.Sleep(time.Second)
 	}
+
 	now := time.Now()
 	updates := map[string]any{
 		"container_id":   resp.ID,
@@ -236,11 +296,11 @@ func (s *Service) Start(userID uint) (*StatusView, error) {
 		}
 	}
 	_ = s.db.Model(rt).Updates(updates).Error
-	return s.Status(userID)
+	return s.Status(userID, projectID)
 }
 
-func (s *Service) Stop(userID uint) error {
-	rt, err := s.GetOrCreate(userID)
+func (s *Service) Stop(userID, projectID uint) error {
+	rt, err := s.GetOrCreate(userID, projectID)
 	if err != nil {
 		return err
 	}
@@ -255,22 +315,26 @@ func (s *Service) Stop(userID uint) error {
 	}).Error
 }
 
-func (s *Service) EnsureRunning(userID uint) (*models.WorkspaceRuntime, string, string, error) {
-	rt, err := s.GetOrCreate(userID)
+// EnsureRunning starts the project runtime if needed and returns MCP endpoint + token.
+func (s *Service) EnsureRunning(userID, projectID uint) (*models.WorkspaceRuntime, string, string, error) {
+	if _, err := s.projects.Get(userID, projectID); err != nil {
+		return nil, "", "", err
+	}
+	rt, err := s.GetOrCreate(userID, projectID)
 	if err != nil {
 		return nil, "", "", err
 	}
-	if rt.ActiveProjectID == nil {
-		return nil, "", "", ErrNoActiveProject
-	}
 	if rt.Status != models.RuntimeRunning {
-		if _, err := s.Start(userID); err != nil {
+		if _, err := s.Start(userID, projectID); err != nil {
 			return nil, "", "", err
 		}
-		rt, err = s.GetOrCreate(userID)
+		rt, err = s.GetOrCreate(userID, projectID)
 		if err != nil {
 			return nil, "", "", err
 		}
+	}
+	if rt.Status != models.RuntimeRunning {
+		return nil, "", "", fmt.Errorf("runtime not running: %s", rt.LastError)
 	}
 	token, err := s.plainToken(rt)
 	if err != nil {
@@ -282,12 +346,26 @@ func (s *Service) EnsureRunning(userID uint) (*models.WorkspaceRuntime, string, 
 	return rt, endpoint, token, nil
 }
 
+// DeleteForProject stops container and removes runtime row (call on project delete).
+func (s *Service) DeleteForProject(userID, projectID uint) error {
+	var rt models.WorkspaceRuntime
+	err := s.db.Where("user_id = ? AND project_id = ?", userID, projectID).First(&rt).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if s.docker != nil {
+		_ = s.removeContainer(context.Background(), rt.ContainerName)
+	}
+	return s.db.Delete(&rt).Error
+}
+
 func (s *Service) mcpURL(rt *models.WorkspaceRuntime) string {
 	if s.docker == nil {
-		return fmt.Sprintf("http://127.0.0.1:8765/mcp")
+		return "http://127.0.0.1:8765/mcp"
 	}
-	// Prefer container name on docker network when API also in compose.
-	// For host-run API, resolve container IP.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if rt.ContainerID != "" {
@@ -349,12 +427,15 @@ func (s *Service) ensureNetwork(ctx context.Context) error {
 }
 
 func (s *Service) removeContainer(ctx context.Context, name string) error {
+	if name == "" || s.docker == nil {
+		return nil
+	}
 	timeout := 10
 	_ = s.docker.ContainerStop(ctx, name, container.StopOptions{Timeout: &timeout})
 	return s.docker.ContainerRemove(ctx, name, container.RemoveOptions{Force: true})
 }
 
-// ReapIdle stops runtimes idle longer than configured minutes.
+// ReapIdle stops project runtimes idle longer than configured minutes.
 func (s *Service) ReapIdle(ctx context.Context) error {
 	if s.cfg.RuntimeIdleMinutes <= 0 {
 		return nil
@@ -365,7 +446,7 @@ func (s *Service) ReapIdle(ctx context.Context) error {
 		return err
 	}
 	for _, rt := range items {
-		_ = s.Stop(rt.UserID)
+		_ = s.Stop(rt.UserID, rt.ProjectID)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

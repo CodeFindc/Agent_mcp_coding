@@ -11,6 +11,14 @@
    - 挂载 `docker.sock`  
    - 与用户容器同一 Docker engine  
 
+## 多项目并行
+
+- 容器名：`ctm-u{userId}-p{projectId}`（旧名 `ctm-u{userId}` 会在启动时尝试清理）  
+- 平台 API **不**把 coding-tools 端口 publish 到宿主；多项目 ≠ 多宿主端口  
+- 每用户 running 上限：`MAX_RUNNING_RUNTIMES_PER_USER`（默认 3）  
+- 对话入口只 `EnsureRunning(user, project)`，不会停掉同用户其他项目容器  
+- 前端：`GET /api/v1/runtimes` 显示 running/limit；项目列表上有 per-project 徽章  
+
 ## 仅验证 MCP（不经过平台）
 
 ```bash

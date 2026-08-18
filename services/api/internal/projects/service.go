@@ -20,13 +20,23 @@ var (
 
 var slugCleaner = regexp.MustCompile(`[^a-z0-9]+`)
 
+// RuntimeCleaner stops/removes project containers when a project is deleted.
+type RuntimeCleaner interface {
+	DeleteForProject(userID, projectID uint) error
+}
+
 type Service struct {
 	db       *gorm.DB
 	dataRoot string
+	runtime  RuntimeCleaner
 }
 
 func NewService(db *gorm.DB, dataRoot string) *Service {
 	return &Service{db: db, dataRoot: dataRoot}
+}
+
+func (s *Service) SetRuntimeCleaner(r RuntimeCleaner) {
+	s.runtime = r
 }
 
 type CreateInput struct {
@@ -103,6 +113,9 @@ func (s *Service) Delete(userID, projectID uint) error {
 	p, err := s.Get(userID, projectID)
 	if err != nil {
 		return err
+	}
+	if s.runtime != nil {
+		_ = s.runtime.DeleteForProject(userID, projectID)
 	}
 	if err := s.db.Delete(&models.Project{}, p.ID).Error; err != nil {
 		return err

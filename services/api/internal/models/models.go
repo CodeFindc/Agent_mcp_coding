@@ -39,18 +39,20 @@ const (
 	RuntimeError   RuntimeStatus = "error"
 )
 
+// WorkspaceRuntime is one coding-tools container per (user, project).
+// A user may run multiple projects in parallel.
 type WorkspaceRuntime struct {
-	ID              uint          `gorm:"primaryKey" json:"id"`
-	UserID          uint          `gorm:"uniqueIndex;not null" json:"userId"`
-	ActiveProjectID *uint         `json:"activeProjectId"`
-	ContainerID     string        `gorm:"size:128" json:"containerId"`
-	ContainerName   string        `gorm:"size:128" json:"containerName"`
-	Status          RuntimeStatus `gorm:"size:32;not null;default:stopped" json:"status"`
-	MCPTokenEnc     string        `gorm:"type:text" json:"-"`
-	LastError       string        `gorm:"type:text" json:"lastError"`
-	LastActiveAt    *time.Time    `json:"lastActiveAt"`
-	CreatedAt       time.Time     `json:"createdAt"`
-	UpdatedAt       time.Time     `json:"updatedAt"`
+	ID            uint          `gorm:"primaryKey" json:"id"`
+	UserID        uint          `gorm:"not null;uniqueIndex:idx_runtime_user_project,priority:1" json:"userId"`
+	ProjectID     uint          `gorm:"not null;uniqueIndex:idx_runtime_user_project,priority:2;index" json:"projectId"`
+	ContainerID   string        `gorm:"size:128" json:"containerId"`
+	ContainerName string        `gorm:"size:128" json:"containerName"`
+	Status        RuntimeStatus `gorm:"size:32;not null;default:stopped;index" json:"status"`
+	MCPTokenEnc   string        `gorm:"type:text" json:"-"`
+	LastError     string        `gorm:"type:text" json:"lastError"`
+	LastActiveAt  *time.Time    `json:"lastActiveAt"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
 }
 
 type ChatThread struct {

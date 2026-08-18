@@ -10,6 +10,7 @@ import {
   ChatThread,
   Project,
   RuntimeStatus,
+  RuntimeSummary,
   User,
   sendChat,
 } from "@/lib/api";
@@ -22,7 +23,8 @@ export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
+  const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSummary | null>(null);
+  const [selectedRuntime, setSelectedRuntime] = useState<RuntimeStatus | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [threadId, setThreadId] = useState<number | null>(null);
@@ -38,9 +40,23 @@ export default function HomePage() {
     [projects, selectedProjectId],
   );
 
-  const refreshRuntime = useCallback(async () => {
-    const st = await api.runtime();
-    setRuntime(st);
+  const runtimeByProject = useMemo(() => {
+    const map = new Map<number, RuntimeStatus>();
+    for (const r of runtimeSummary?.runtimes || []) {
+      map.set(r.projectId, r);
+    }
+    return map;
+  }, [runtimeSummary]);
+
+  const refreshRuntimes = useCallback(async () => {
+    const summary = await api.listRuntimes();
+    setRuntimeSummary(summary);
+    return summary;
+  }, []);
+
+  const refreshSelectedRuntime = useCallback(async (projectId: number) => {
+    const st = await api.projectRuntime(projectId);
+    setSelectedRuntime(st);
     return st;
   }, []);
 
@@ -58,15 +74,18 @@ export default function HomePage() {
         const me = await api.me();
         setUser(me);
         await loadProjects();
-        await refreshRuntime();
+        await refreshRuntimes();
       } catch {
         router.replace("/login");
       }
     })();
-  }, [loadProjects, refreshRuntime, router]);
+  }, [loadProjects, refreshRuntimes, router]);
 
   useEffect(() => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId) {
+      setSelectedRuntime(null);
+      return;
+    }
     (async () => {
       try {
         const list = await api.listThreads(selectedProjectId);
@@ -77,11 +96,13 @@ export default function HomePage() {
           setThreadId(null);
           setMessages([]);
         }
+        await refreshSelectedRuntime(selectedProjectId);
+        await refreshRuntimes();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
     })();
-  }, [selectedProjectId]);
+  }, [selectedProjectId, refreshSelectedRuntime, refreshRuntimes]);
 
   useEffect(() => {
     if (!threadId) {
@@ -115,15 +136,32 @@ export default function HomePage() {
     }
   }
 
-  async function activateSelected() {
+  async function startSelected() {
     if (!selectedProjectId) return;
     setBusy(true);
     setError("");
-    setStatusText("正在激活项目并启动容器…");
+    setStatusText("正在启动该项目容器…");
     try {
-      const st = await api.activateProject(selectedProjectId);
-      setRuntime(st);
-      setStatusText(st.mcpReady ? "工作区已就绪" : `状态: ${st.status}`);
+      const st = await api.startProjectRuntime(selectedProjectId);
+      setSelectedRuntime(st);
+      await refreshRuntimes();
+      setStatusText(st.mcpReady ? "工作区已就绪（其他项目容器不受影响）" : `状态: ${st.status}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function stopSelected() {
+    if (!selectedProjectId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const st = await api.stopProjectRuntime(selectedProjectId);
+      setSelectedRuntime(st);
+      await refreshRuntimes();
+      setStatusText("已停止该项目容器");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -196,7 +234,8 @@ export default function HomePage() {
           }
         },
       );
-      await refreshRuntime();
+      await refreshSelectedRuntime(selectedProjectId);
+      await refreshRuntimes();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -210,9 +249,7 @@ export default function HomePage() {
   }
 
   if (!user) {
-    return (
-      <main className="min-h-screen grid place-items-center muted">加载中…</main>
-    );
+    return <main className="min-h-screen grid place-items-center muted">加载中…</main>;
   }
 
   return (
@@ -222,11 +259,14 @@ export default function HomePage() {
           <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500" />
           <div>
             <div className="font-semibold tracking-tight">Coding Agent</div>
-            <div className="text-xs muted">每用户隔离工作区 · coding-tools-mcp</div>
+            <div className="text-xs muted">每项目独立容器 · 可并行运行</div>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <RuntimeBadge runtime={runtime} />
+          <span className="badge run">
+            运行中 {runtimeSummary?.running ?? 0}/{runtimeSummary?.limit ?? "?"}
+          </span>
+          <RuntimeBadge runtime={selectedRuntime} />
           <span className="muted">{user.name || user.email}</span>
           {user.role === "admin" ? (
             <Link className="btn" href="/admin">
@@ -241,11 +281,16 @@ export default function HomePage() {
 
       <div className="grid lg:grid-cols-[280px_220px_1fr] min-h-0">
         <aside className="border-r border-[var(--border)] p-4 space-y-4 overflow-auto">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium">项目</h2>
-            <button className="btn text-xs" disabled={busy || !selectedProjectId} onClick={activateSelected}>
-              激活并启动
-            </button>
+            <div className="flex gap-1">
+              <button className="btn text-xs" disabled={busy || !selectedProjectId} onClick={startSelected}>
+                启动
+              </button>
+              <button className="btn text-xs" disabled={busy || !selectedProjectId} onClick={stopSelected}>
+                停止
+              </button>
+            </div>
           </div>
           <form onSubmit={createProject} className="flex gap-2">
             <input
@@ -261,7 +306,7 @@ export default function HomePage() {
           <div className="space-y-2">
             {projects.map((p) => {
               const active = p.id === selectedProjectId;
-              const isRuntime = runtime?.activeProjectId === p.id;
+              const rt = runtimeByProject.get(p.id);
               return (
                 <button
                   key={p.id}
@@ -270,14 +315,19 @@ export default function HomePage() {
                 >
                   <div className="font-medium">{p.name}</div>
                   <div className="text-xs muted mt-1">{p.slug}</div>
-                  {isRuntime ? <div className="mt-2 badge run">当前工作区</div> : null}
+                  <div className="mt-2">
+                    <ProjectRuntimeBadge runtime={rt} />
+                  </div>
                 </button>
               );
             })}
             {!projects.length ? <p className="muted text-sm">还没有项目，先创建一个。</p> : null}
           </div>
           {selectedProject ? (
-            <div className="text-xs muted break-all">路径：{selectedProject.diskPath}</div>
+            <div className="text-xs muted break-all space-y-1">
+              <div>路径：{selectedProject.diskPath}</div>
+              {selectedRuntime?.containerName ? <div>容器：{selectedRuntime.containerName}</div> : null}
+            </div>
           ) : null}
         </aside>
 
@@ -328,10 +378,11 @@ export default function HomePage() {
             ))}
             {!messages.length ? (
               <div className="card p-6 muted text-sm leading-7">
-                选择或创建项目后开始对话。模型可通过 coding-tools 工具读写当前工作区。
+                每个项目可独立启动 coding-tools 容器，多个项目可同时 running。
                 <br />
-                若尚未配置模型，请管理员在「管理」页添加 OpenAI 兼容渠道，或设置环境变量
-                DEFAULT_OPENAI_API_KEY。
+                对话只会 EnsureRunning 当前项目，不会停掉其他项目。
+                <br />
+                默认每用户最多并行 {runtimeSummary?.limit ?? 3} 个运行中工作区（MAX_RUNNING_RUNTIMES_PER_USER）。
               </div>
             ) : null}
           </div>
@@ -360,8 +411,17 @@ export default function HomePage() {
 }
 
 function RuntimeBadge({ runtime }: { runtime: RuntimeStatus | null }) {
-  if (!runtime) return <span className="badge">runtime -</span>;
-  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">MCP ready</span>;
+  if (!runtime) return <span className="badge">当前项目 -</span>;
+  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">当前 MCP ready</span>;
+  if (runtime.status === "running") return <span className="badge run">当前 running</span>;
+  if (runtime.status === "error") return <span className="badge err">当前 error</span>;
+  if (runtime.status === "starting") return <span className="badge run">当前 starting</span>;
+  return <span className="badge">当前 stopped</span>;
+}
+
+function ProjectRuntimeBadge({ runtime }: { runtime?: RuntimeStatus }) {
+  if (!runtime) return <span className="badge">stopped</span>;
+  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">running</span>;
   if (runtime.status === "running") return <span className="badge run">running</span>;
   if (runtime.status === "error") return <span className="badge err">error</span>;
   if (runtime.status === "starting") return <span className="badge run">starting</span>;

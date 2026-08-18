@@ -128,23 +128,25 @@ func (s *Service) ListUsers() ([]models.User, error) {
 }
 
 type PlatformInfo struct {
-	CodingToolsImage   string `json:"codingToolsImage"`
-	DockerNetwork      string `json:"dockerNetwork"`
-	PermissionMode     string `json:"permissionMode"`
-	RuntimeIdleMinutes int    `json:"runtimeIdleMinutes"`
-	DevAuthEnabled     bool   `json:"devAuthEnabled"`
-	OIDCEnabled        bool   `json:"oidcEnabled"`
-	DataRoot           string `json:"dataRoot"`
+	CodingToolsImage          string `json:"codingToolsImage"`
+	DockerNetwork             string `json:"dockerNetwork"`
+	PermissionMode            string `json:"permissionMode"`
+	RuntimeIdleMinutes        int    `json:"runtimeIdleMinutes"`
+	MaxRunningRuntimesPerUser int    `json:"maxRunningRuntimesPerUser"`
+	DevAuthEnabled            bool   `json:"devAuthEnabled"`
+	OIDCEnabled               bool   `json:"oidcEnabled"`
+	DataRoot                  string `json:"dataRoot"`
 }
 
 func (s *Service) PlatformInfo(oidcEnabled bool) PlatformInfo {
 	return PlatformInfo{
-		CodingToolsImage:   s.cfg.CodingToolsImage,
-		DockerNetwork:      s.cfg.DockerNetwork,
-		PermissionMode:     s.cfg.PermissionMode,
-		RuntimeIdleMinutes: s.cfg.RuntimeIdleMinutes,
-		DevAuthEnabled:     s.cfg.DevAuthEnabled,
-		OIDCEnabled:        oidcEnabled,
-		DataRoot:           s.cfg.DataRoot,
+		CodingToolsImage:          s.cfg.CodingToolsImage,
+		DockerNetwork:             s.cfg.DockerNetwork,
+		PermissionMode:            s.cfg.PermissionMode,
+		RuntimeIdleMinutes:        s.cfg.RuntimeIdleMinutes,
+		MaxRunningRuntimesPerUser: s.cfg.MaxRunningRuntimesPerUser,
+		DevAuthEnabled:            s.cfg.DevAuthEnabled,
+		OIDCEnabled:               oidcEnabled,
+		DataRoot:                  s.cfg.DataRoot,
 	}
 }

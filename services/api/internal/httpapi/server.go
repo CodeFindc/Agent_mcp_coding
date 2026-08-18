@@ -78,11 +78,15 @@ func New(
 			r.Get("/projects", s.handleListProjects)
 			r.Post("/projects", s.handleCreateProject)
 			r.Delete("/projects/{id}", s.handleDeleteProject)
-			r.Post("/projects/{id}/activate", s.handleActivateProject)
 
-			r.Get("/runtime", s.handleRuntimeStatus)
-			r.Post("/runtime/start", s.handleRuntimeStart)
-			r.Post("/runtime/stop", s.handleRuntimeStop)
+			// Per-project runtimes (one container per project; parallel OK).
+			r.Get("/projects/{id}/runtime", s.handleProjectRuntimeStatus)
+			r.Post("/projects/{id}/runtime/start", s.handleProjectRuntimeStart)
+			r.Post("/projects/{id}/runtime/stop", s.handleProjectRuntimeStop)
+			// Backward-compatible alias for start.
+			r.Post("/projects/{id}/activate", s.handleProjectRuntimeStart)
+
+			r.Get("/runtimes", s.handleListRuntimes)
 
 			r.Get("/projects/{id}/threads", s.handleListThreads)
 			r.Post("/projects/{id}/threads", s.handleCreateThread)
@@ -194,49 +198,63 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (s *Server) handleActivateProject(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleProjectRuntimeStatus(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
 	id, err := pathID(r, "id")
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	st, err := s.runtime.ActivateProject(user.ID, id)
+	st, err := s.runtime.Status(user.ID, id)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
+		writeProjectErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
 }
 
-func (s *Server) handleRuntimeStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleProjectRuntimeStart(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r.Context())
-	st, err := s.runtime.Status(user.ID)
+	id, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	st, err := s.runtime.Start(user.ID, id)
+	if err != nil {
+		if errors.Is(err, runtime.ErrQuotaExceeded) {
+			writeErr(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleProjectRuntimeStop(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	id, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := s.runtime.Stop(user.ID, id); err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	st, _ := s.runtime.Status(user.ID, id)
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (s *Server) handleListRuntimes(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	summary, err := s.runtime.List(user.ID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
-}
-
-func (s *Server) handleRuntimeStart(w http.ResponseWriter, r *http.Request) {
-	user := auth.UserFromContext(r.Context())
-	st, err := s.runtime.Start(user.ID)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, st)
-}
-
-func (s *Server) handleRuntimeStop(w http.ResponseWriter, r *http.Request) {
-	user := auth.UserFromContext(r.Context())
-	if err := s.runtime.Stop(user.ID); err != nil {
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	st, _ := s.runtime.Status(user.ID)
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (s *Server) handleListThreads(w http.ResponseWriter, r *http.Request) {

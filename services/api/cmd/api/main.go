@@ -46,6 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("runtime: %v", err)
 	}
+	projectsSvc.SetRuntimeCleaner(runtimeSvc)
 	chatSvc := chat.NewService(gdb, cfg, projectsSvc, runtimeSvc)
 	adminSvc := admin.NewService(gdb, cfg)
 

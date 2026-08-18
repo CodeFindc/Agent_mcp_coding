@@ -17,11 +17,18 @@ export type Project = {
 };
 
 export type RuntimeStatus = {
+  projectId: number;
   status: "stopped" | "starting" | "running" | "error";
-  activeProjectId?: number | null;
   containerName?: string;
   lastError?: string;
+  lastActiveAt?: string | null;
   mcpReady?: boolean;
+};
+
+export type RuntimeSummary = {
+  running: number;
+  limit: number;
+  runtimes: RuntimeStatus[];
 };
 
 export type ChatThread = {
@@ -93,11 +100,15 @@ export const api = {
     }),
   deleteProject: (id: number) =>
     request<{ status: string }>(`/api/v1/projects/${id}`, { method: "DELETE" }),
+  projectRuntime: (id: number) => request<RuntimeStatus>(`/api/v1/projects/${id}/runtime`),
+  startProjectRuntime: (id: number) =>
+    request<RuntimeStatus>(`/api/v1/projects/${id}/runtime/start`, { method: "POST" }),
+  stopProjectRuntime: (id: number) =>
+    request<RuntimeStatus>(`/api/v1/projects/${id}/runtime/stop`, { method: "POST" }),
+  /** @deprecated use startProjectRuntime */
   activateProject: (id: number) =>
     request<RuntimeStatus>(`/api/v1/projects/${id}/activate`, { method: "POST" }),
-  runtime: () => request<RuntimeStatus>("/api/v1/runtime"),
-  runtimeStart: () => request<RuntimeStatus>("/api/v1/runtime/start", { method: "POST" }),
-  runtimeStop: () => request<RuntimeStatus>("/api/v1/runtime/stop", { method: "POST" }),
+  listRuntimes: () => request<RuntimeSummary>("/api/v1/runtimes"),
   listThreads: (projectId: number) =>
     request<ChatThread[]>(`/api/v1/projects/${projectId}/threads`),
   createThread: (projectId: number, title?: string) =>

@@ -24,15 +24,16 @@ type Config struct {
 	CodingToolsImage    string
 	DockerNetwork       string
 	PermissionMode      string
-	RuntimeIdleMinutes  int
-	MCPRequestTimeout   time.Duration
-	ChatMaxRounds       int
-	ChatMaxToolCalls    int
-	DefaultOpenAIBase   string
-	DefaultOpenAIKey    string
-	DefaultOpenAIModel  string
-	CookieSecure        bool
-	CookieName          string
+	RuntimeIdleMinutes         int
+	MaxRunningRuntimesPerUser  int
+	MCPRequestTimeout          time.Duration
+	ChatMaxRounds              int
+	ChatMaxToolCalls           int
+	DefaultOpenAIBase          string
+	DefaultOpenAIKey           string
+	DefaultOpenAIModel         string
+	CookieSecure               bool
+	CookieName                 string
 }
 
 func Load() (Config, error) {
@@ -52,8 +53,9 @@ func Load() (Config, error) {
 		CodingToolsImage:   env("CODING_TOOLS_IMAGE", "coding-tools-mcp:local"),
 		DockerNetwork:      env("DOCKER_NETWORK", "agent-internal"),
 		PermissionMode:     env("PERMISSION_MODE", "trusted"),
-		RuntimeIdleMinutes: envInt("RUNTIME_IDLE_MINUTES", 30),
-		MCPRequestTimeout:  time.Duration(envInt("MCP_REQUEST_TIMEOUT_MS", 120000)) * time.Millisecond,
+		RuntimeIdleMinutes:        envInt("RUNTIME_IDLE_MINUTES", 30),
+		MaxRunningRuntimesPerUser: envInt("MAX_RUNNING_RUNTIMES_PER_USER", 3),
+		MCPRequestTimeout:         time.Duration(envInt("MCP_REQUEST_TIMEOUT_MS", 120000)) * time.Millisecond,
 		ChatMaxRounds:      envInt("CHAT_MAX_ROUNDS", 12),
 		ChatMaxToolCalls:   envInt("CHAT_MAX_TOOL_CALLS", 32),
 		DefaultOpenAIBase:  env("DEFAULT_OPENAI_BASE_URL", "https://api.openai.com/v1"),
