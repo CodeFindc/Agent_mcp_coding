@@ -4,8 +4,8 @@
 
 - OIDC / Dev 登录
 - 每用户独立项目目录（持久化）
-- **每用户每项目**一个 `coding-tools-mcp` 容器（可并行）
-- OpenAI 兼容模型 + 工具循环（MCP tools）
+- **每用户一个** `coding-tools-mcp` 容器；容器内多项目 Runtime（按 slug 隔离）
+- OpenAI 兼容模型 + 工具循环（MCP tools + `_meta` 传 project slug）
 - Go API + Next.js 前端
 
 ## 架构
@@ -17,21 +17,23 @@ Browser (Next.js :3000)
 API (Go :8080)
    ├─ projects / auth / admin
    ├─ chat agent loop (OpenAI-compatible)
-   └─ Docker → ctm-u{userId}-p{projectId} (coding-tools-mcp)
-                 volume: DATA_ROOT/users/{id}/projects/{slug} → /workspace
+   └─ Docker → ctm-u{userId} (coding-tools-mcp multi-project)
+                 volume: DATA_ROOT/users/{id}/projects → /projects
+                 env: CODING_TOOLS_MCP_PROJECTS_ROOT=/projects
+                 tools/call _meta: coding-tools-mcp/project = slug
                  （不 publish 宿主端口；Docker 网 agent-internal 内访问）
 ```
 
-同一用户可同时让多个项目处于 `running`，互不影响：
+同一用户多个项目共享一个容器，进程内按目录隔离：
 
 ```text
-User A
-  ├─ Project 1 ── ctm-u{A}-p{1} ── mount proj1 → /workspace
-  ├─ Project 2 ── ctm-u{A}-p{2} ── mount proj2 → /workspace
-  └─ Project 3 ── stopped（无容器或已 idle 回收）
+User A ── ctm-u{A}
+            ├─ /projects/proj-a  → Runtime A
+            ├─ /projects/proj-b  → Runtime B
+            └─ MCP 每次调用带 slug 选择 Runtime
 ```
 
-并发上限由 `MAX_RUNNING_RUNTIMES_PER_USER`（默认 3）控制；超出时 start 返回冲突错误。空闲回收按**项目 runtime** 分别计时（`RUNTIME_IDLE_MINUTES`）。
+空闲回收按**用户 runtime** 计时（`RUNTIME_IDLE_MINUTES`）。每用户最多 1 个 coding-tools 容器。
 
 ## 快速开始（本机开发）
 
@@ -94,9 +96,9 @@ cd D:\dev\coding-agent-platform
 ### 4. 使用流程
 
 1. 创建多个项目  
-2. 对需要的项目点「启动」（只起该项目容器 `ctm-u…-p…`，**不停**其他项目）  
-3. 在对应项目下对话；模型调用 MCP 工具只读写该项目目录  
-4. 可同时在另一项目对话（另一容器并行 running）  
+2. 点「启动工作区」（起用户容器 `ctm-u…`，挂载全部 projects 父目录）  
+3. 在对应项目下对话；API 将 project slug 传给 MCP，工具只读写该项目目录  
+4. 可同时在另一项目对话（同一容器、另一 Runtime）  
 5. Admin 页配置模型渠道（可选）
 
 ## Docker Compose
@@ -112,7 +114,7 @@ docker compose -f deploy/docker-compose.yml up --build
 - API: http://localhost:8080  
 - Postgres: localhost:5432  
 
-> API 容器挂载了 docker.sock，用于为每个 **(用户, 项目)** 创建 coding-tools 容器。  
+> API 容器挂载了 docker.sock，用于为每个 **用户** 创建 coding-tools 容器。  
 > Windows 上请确保 Docker Desktop 允许该挂载。
 
 ## OIDC
@@ -181,12 +183,16 @@ coding-agent-platform/
 
 ## 与 coding-tools-mcp 的关系
 
-本平台 **不修改** `coding-tools-mcp` 源码。  
-把它当作运行时镜像：一进程一根 workspace root；由平台按 **(user, project)** 编排多容器，实现多租户与多项目并行隔离。
+平台使用支持 **multi-project** 的 coding-tools-mcp 镜像：  
+`CODING_TOOLS_MCP_PROJECTS_ROOT=/projects`，每次 MCP 调用通过  
+`params._meta["coding-tools-mcp/project"]`（及可选 Header `X-Coding-Tools-Project`）选择 slug。  
+详见 coding-tools 仓库 `docs/multi-project.md`。
+
+多租户边界仍是 **每用户一容器**；同用户项目之间是路径级隔离，共享进程与 bearer token。
 
 ## 已知限制（MVP）
 
-- coding-tools 单进程不能多 workspace，故并行 = 多容器（有内存/CPU 成本，靠配额 + idle reap）  
+- 同用户项目共享容器与 token（非多租户安全边界）  
 - Chat 完成调用暂为非 token 级流式（SSE 推送轮次/工具/完整回复）  
 - 单机 Docker；未做 K8s  
 - 无计费 / 无组织级 RBAC  

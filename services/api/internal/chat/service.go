@@ -136,37 +136,38 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 	}
 	emit(Event{Type: "user_message", MessageID: userMsg.ID, Content: content, ThreadID: thread.ID})
 
-	// Ensure only this project's container is up; other projects keep running.
-	_, endpoint, token, err := s.runtime.EnsureRunning(userID, project.ID)
-	if err != nil {
-		emit(Event{Type: "error", Error: err.Error()})
-		return err
-	}
+		// One container per user; project slug selects the in-process Runtime.
+		_, endpoint, token, err := s.runtime.EnsureRunning(userID)
+		if err != nil {
+			emit(Event{Type: "error", Error: err.Error()})
+			return err
+		}
 
-	tools, err := s.mcp.ListTools(ctx, endpoint, token)
-	if err != nil {
-		emit(Event{Type: "error", Error: "mcp tools/list: " + err.Error()})
-		return err
-	}
-	llmTools := mcpToolsToLLM(tools)
+		tools, err := s.mcp.ListTools(ctx, endpoint, token, project.Slug)
+		if err != nil {
+			emit(Event{Type: "error", Error: "mcp tools/list: " + err.Error()})
+			return err
+		}
+		llmTools := mcpToolsToLLM(tools)
 
-	provider, apiKey, err := s.activeProvider()
-	if err != nil {
-		emit(Event{Type: "error", Error: err.Error()})
-		return err
-	}
+		provider, apiKey, err := s.activeProvider()
+		if err != nil {
+			emit(Event{Type: "error", Error: err.Error()})
+			return err
+		}
 
-	history, err := s.ListMessages(userID, thread.ID)
-	if err != nil {
-		return err
-	}
-	messages := []llm.Message{{
-		Role: "system",
-		Content: fmt.Sprintf(
-			"You are a coding agent with MCP tools confined to the user workspace.\nProject: %s\nUse tools to inspect and modify files. Prefer small focused edits. Explain briefly after tool use.",
-			project.Name,
-		),
-	}}
+		history, err := s.ListMessages(userID, thread.ID)
+		if err != nil {
+			return err
+		}
+		messages := []llm.Message{{
+			Role: "system",
+			Content: fmt.Sprintf(
+				"You are a coding agent with MCP tools confined to the current project workspace.\nProject name: %s\nProject slug: %s\nTools are already isolated to this project root; do not attempt paths outside it or into other projects.\nPrefer small focused edits. Explain briefly after tool use.",
+				project.Name,
+				project.Slug,
+			),
+		}}
 	messages = append(messages, dbMessagesToLLM(history)...)
 
 	toolCallsUsed := 0
@@ -205,7 +206,7 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 				args := map[string]any{}
 				_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				emit(Event{Type: "tool_start", Tool: tc.Function.Name, Args: tc.Function.Arguments, ThreadID: thread.ID})
-				result, callErr := s.mcp.CallTool(ctx, endpoint, token, tc.Function.Name, args)
+					result, callErr := s.mcp.CallTool(ctx, endpoint, token, project.Slug, tc.Function.Name, args)
 				if callErr != nil {
 					result = callErr.Error()
 				}

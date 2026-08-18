@@ -11,7 +11,7 @@ const (
 
 type User struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	OIDCSub   string    `gorm:"size:255;uniqueIndex" json:"oidcSub"`
+	OIDCSub   string    `gorm:"column:oidc_sub;size:255;uniqueIndex" json:"oidcSub"`
 	Email     string    `gorm:"size:255;index" json:"email"`
 	Name      string    `gorm:"size:255" json:"name"`
 	Role      UserRole  `gorm:"size:32;not null;default:user" json:"role"`
@@ -39,12 +39,11 @@ const (
 	RuntimeError   RuntimeStatus = "error"
 )
 
-// WorkspaceRuntime is one coding-tools container per (user, project).
-// A user may run multiple projects in parallel.
+// WorkspaceRuntime is one coding-tools container per user.
+// Multiple projects share that container via coding-tools multi-project mode.
 type WorkspaceRuntime struct {
 	ID            uint          `gorm:"primaryKey" json:"id"`
-	UserID        uint          `gorm:"not null;uniqueIndex:idx_runtime_user_project,priority:1" json:"userId"`
-	ProjectID     uint          `gorm:"not null;uniqueIndex:idx_runtime_user_project,priority:2;index" json:"projectId"`
+	UserID        uint          `gorm:"not null;uniqueIndex" json:"userId"`
 	ContainerID   string        `gorm:"size:128" json:"containerId"`
 	ContainerName string        `gorm:"size:128" json:"containerName"`
 	Status        RuntimeStatus `gorm:"size:32;not null;default:stopped;index" json:"status"`

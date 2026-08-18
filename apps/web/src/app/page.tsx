@@ -40,22 +40,22 @@ export default function HomePage() {
     [projects, selectedProjectId],
   );
 
-  const runtimeByProject = useMemo(() => {
-    const map = new Map<number, RuntimeStatus>();
-    for (const r of runtimeSummary?.runtimes || []) {
-      map.set(r.projectId, r);
-    }
-    return map;
-  }, [runtimeSummary]);
+  const userRuntimeStatus = useMemo(() => {
+    if (selectedRuntime) return selectedRuntime;
+    return runtimeSummary?.runtimes?.[0] || null;
+  }, [selectedRuntime, runtimeSummary]);
 
   const refreshRuntimes = useCallback(async () => {
     const summary = await api.listRuntimes();
     setRuntimeSummary(summary);
+    if (summary.runtimes?.[0]) {
+      setSelectedRuntime(summary.runtimes[0]);
+    }
     return summary;
   }, []);
 
-  const refreshSelectedRuntime = useCallback(async (projectId: number) => {
-    const st = await api.projectRuntime(projectId);
+  const refreshSelectedRuntime = useCallback(async () => {
+    const st = await api.userRuntime();
     setSelectedRuntime(st);
     return st;
   }, []);
@@ -83,7 +83,6 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!selectedProjectId) {
-      setSelectedRuntime(null);
       return;
     }
     (async () => {
@@ -96,7 +95,7 @@ export default function HomePage() {
           setThreadId(null);
           setMessages([]);
         }
-        await refreshSelectedRuntime(selectedProjectId);
+        await refreshSelectedRuntime();
         await refreshRuntimes();
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -137,15 +136,18 @@ export default function HomePage() {
   }
 
   async function startSelected() {
-    if (!selectedProjectId) return;
     setBusy(true);
     setError("");
-    setStatusText("正在启动该项目容器…");
+    setStatusText("正在启动用户工作区容器…");
     try {
-      const st = await api.startProjectRuntime(selectedProjectId);
+      const st = await api.startUserRuntime();
       setSelectedRuntime(st);
       await refreshRuntimes();
-      setStatusText(st.mcpReady ? "工作区已就绪（其他项目容器不受影响）" : `状态: ${st.status}`);
+      setStatusText(
+        st.mcpReady
+          ? "用户容器已就绪（多项目共享同一容器，按 slug 隔离）"
+          : `状态: ${st.status}`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -154,14 +156,13 @@ export default function HomePage() {
   }
 
   async function stopSelected() {
-    if (!selectedProjectId) return;
     setBusy(true);
     setError("");
     try {
-      const st = await api.stopProjectRuntime(selectedProjectId);
+      const st = await api.stopUserRuntime();
       setSelectedRuntime(st);
       await refreshRuntimes();
-      setStatusText("已停止该项目容器");
+      setStatusText("已停止用户工作区容器");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -234,7 +235,7 @@ export default function HomePage() {
           }
         },
       );
-      await refreshSelectedRuntime(selectedProjectId);
+      await refreshSelectedRuntime();
       await refreshRuntimes();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -259,14 +260,11 @@ export default function HomePage() {
           <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500" />
           <div>
             <div className="font-semibold tracking-tight">Coding Agent</div>
-            <div className="text-xs muted">每项目独立容器 · 可并行运行</div>
+            <div className="text-xs muted">一用户一容器 · 多项目并行</div>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <span className="badge run">
-            运行中 {runtimeSummary?.running ?? 0}/{runtimeSummary?.limit ?? "?"}
-          </span>
-          <RuntimeBadge runtime={selectedRuntime} />
+          <RuntimeBadge runtime={userRuntimeStatus} />
           <span className="muted">{user.name || user.email}</span>
           {user.role === "admin" ? (
             <Link className="btn" href="/admin">
@@ -284,10 +282,10 @@ export default function HomePage() {
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium">项目</h2>
             <div className="flex gap-1">
-              <button className="btn text-xs" disabled={busy || !selectedProjectId} onClick={startSelected}>
-                启动
+              <button className="btn text-xs" disabled={busy} onClick={startSelected}>
+                启动工作区
               </button>
-              <button className="btn text-xs" disabled={busy || !selectedProjectId} onClick={stopSelected}>
+              <button className="btn text-xs" disabled={busy} onClick={stopSelected}>
                 停止
               </button>
             </div>
@@ -306,7 +304,6 @@ export default function HomePage() {
           <div className="space-y-2">
             {projects.map((p) => {
               const active = p.id === selectedProjectId;
-              const rt = runtimeByProject.get(p.id);
               return (
                 <button
                   key={p.id}
@@ -316,7 +313,7 @@ export default function HomePage() {
                   <div className="font-medium">{p.name}</div>
                   <div className="text-xs muted mt-1">{p.slug}</div>
                   <div className="mt-2">
-                    <ProjectRuntimeBadge runtime={rt} />
+                    <ProjectRuntimeBadge runtime={userRuntimeStatus || undefined} selected={active} />
                   </div>
                 </button>
               );
@@ -326,7 +323,7 @@ export default function HomePage() {
           {selectedProject ? (
             <div className="text-xs muted break-all space-y-1">
               <div>路径：{selectedProject.diskPath}</div>
-              {selectedRuntime?.containerName ? <div>容器：{selectedRuntime.containerName}</div> : null}
+              {userRuntimeStatus?.containerName ? <div>容器：{userRuntimeStatus.containerName}</div> : null}
             </div>
           ) : null}
         </aside>
@@ -378,11 +375,11 @@ export default function HomePage() {
             ))}
             {!messages.length ? (
               <div className="card p-6 muted text-sm leading-7">
-                每个项目可独立启动 coding-tools 容器，多个项目可同时 running。
+                每位用户一个 coding-tools 容器；多个项目共享该容器，在进程内按项目 slug 隔离。
                 <br />
-                对话只会 EnsureRunning 当前项目，不会停掉其他项目。
+                对话会 EnsureRunning 用户容器，并通过 MCP _meta 传入当前项目 slug。
                 <br />
-                默认每用户最多并行 {runtimeSummary?.limit ?? 3} 个运行中工作区（MAX_RUNNING_RUNTIMES_PER_USER）。
+                新建项目无需再起容器，目录出现在 /projects/&#123;slug&#125; 即可懒加载 Runtime。
               </div>
             ) : null}
           </div>
@@ -411,17 +408,19 @@ export default function HomePage() {
 }
 
 function RuntimeBadge({ runtime }: { runtime: RuntimeStatus | null }) {
-  if (!runtime) return <span className="badge">当前项目 -</span>;
-  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">当前 MCP ready</span>;
-  if (runtime.status === "running") return <span className="badge run">当前 running</span>;
-  if (runtime.status === "error") return <span className="badge err">当前 error</span>;
-  if (runtime.status === "starting") return <span className="badge run">当前 starting</span>;
-  return <span className="badge">当前 stopped</span>;
+  if (!runtime) return <span className="badge">工作区 -</span>;
+  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">工作区 MCP ready</span>;
+  if (runtime.status === "running") return <span className="badge run">工作区 running</span>;
+  if (runtime.status === "error") return <span className="badge err">工作区 error</span>;
+  if (runtime.status === "starting") return <span className="badge run">工作区 starting</span>;
+  return <span className="badge">工作区 stopped</span>;
 }
 
-function ProjectRuntimeBadge({ runtime }: { runtime?: RuntimeStatus }) {
-  if (!runtime) return <span className="badge">stopped</span>;
-  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">running</span>;
+function ProjectRuntimeBadge({ runtime, selected }: { runtime?: RuntimeStatus; selected?: boolean }) {
+  if (!runtime) return <span className="badge">工作区 stopped</span>;
+  if (runtime.status === "running" && runtime.mcpReady) {
+    return <span className="badge ok">{selected ? "当前 · ready" : "ready"}</span>;
+  }
   if (runtime.status === "running") return <span className="badge run">running</span>;
   if (runtime.status === "error") return <span className="badge err">error</span>;
   if (runtime.status === "starting") return <span className="badge run">starting</span>;

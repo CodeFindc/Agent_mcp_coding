@@ -3,38 +3,56 @@
 ## Windows 注意
 
 1. **Docker Desktop** 必须运行。  
-2. 项目目录挂载：API 使用宿主机绝对路径 bind mount 到容器 `/workspace`。  
+2. 项目目录挂载：API 将宿主机 `DATA_ROOT/users/{uid}/projects` bind 到容器 `/projects`。  
 3. 若 API 跑在 **宿主机**（`go run`）而不是 compose：  
    - 通过容器 IP 访问 MCP（代码会 `ContainerInspect` 取 IP）  
    - 确保 Docker 网络 `agent-internal` 可创建  
 4. 若 API 跑在 **compose 容器**内：  
    - 挂载 `docker.sock`  
    - 与用户容器同一 Docker engine  
+   - `DATA_ROOT` 必须是**宿主机绝对路径**，以便 bind mount 生效  
 
-## 多项目并行
+## 多项目（一用户一容器）
 
-- 容器名：`ctm-u{userId}-p{projectId}`（旧名 `ctm-u{userId}` 会在启动时尝试清理）  
-- 平台 API **不**把 coding-tools 端口 publish 到宿主；多项目 ≠ 多宿主端口  
-- 每用户 running 上限：`MAX_RUNNING_RUNTIMES_PER_USER`（默认 3）  
-- 对话入口只 `EnsureRunning(user, project)`，不会停掉同用户其他项目容器  
-- 前端：`GET /api/v1/runtimes` 显示 running/limit；项目列表上有 per-project 徽章  
+- 容器名：`ctm-u{userId}`（启动时会清理旧的 `ctm-u*-p*` 与误挂单项目路径的遗留容器）  
+- 平台 API **不**把 coding-tools 端口 publish 到宿主  
+- 环境：`CODING_TOOLS_MCP_PROJECTS_ROOT=/projects`  
+- 对话入口 `EnsureRunning(user)`；MCP `ListTools` / `CallTool` 携带 project **slug**  
+- 前端：用户级工作区徽章；`GET /api/v1/runtime` 与兼容的 `/projects/{id}/runtime/*`  
 
-## 仅验证 MCP（不经过平台）
+## 仅验证 MCP multi-project（不经过平台）
 
 ```bash
+mkdir -p /tmp/projects/alpha /tmp/projects/beta
+echo aaa > /tmp/projects/alpha/a.txt
+echo bbb > /tmp/projects/beta/b.txt
 docker network create agent-internal || true
 docker run --rm -d --name ctm-test --network agent-internal \
   -e CODING_TOOLS_MCP_AUTH_MODE=bearer \
   -e CODING_TOOLS_MCP_AUTH_TOKEN=test-token \
   -e CODING_TOOLS_MCP_GENERATE_AUTH_TOKEN=0 \
-  -e CODING_TOOLS_MCP_WORKSPACE=/workspace \
+  -e CODING_TOOLS_MCP_PROJECTS_ROOT=/projects \
   -e CODING_TOOLS_MCP_HOST=0.0.0.0 \
-  -v "D:/tmp/ws:/workspace" \
+  -e CODING_TOOLS_MCP_PORT=8765 \
+  -v "/tmp/projects:/projects" \
   -p 8765:8765 \
   coding-tools-mcp:local
 ```
 
-然后用 curl 对 `http://127.0.0.1:8765/mcp` 发 initialize / tools/list。
+`tools/call` 示例（注意 `_meta`）：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "read_file",
+    "arguments": { "path": "a.txt" },
+    "_meta": { "coding-tools-mcp/project": "alpha" }
+  }
+}
+```
 
 ## 环境变量权威来源
 

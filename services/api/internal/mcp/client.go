@@ -16,6 +16,9 @@ import (
 
 const protocolVersion = "2025-06-18"
 
+// ProjectMetaKey is read by coding-tools-mcp multi-project routing.
+const ProjectMetaKey = "coding-tools-mcp/project"
+
 type Client struct {
 	httpClient *http.Client
 	nextID     atomic.Int64
@@ -36,12 +39,12 @@ func NewClient(timeout time.Duration) *Client {
 	}
 }
 
-func (c *Client) ListTools(ctx context.Context, baseURL, authToken string) ([]Tool, error) {
-	session, err := c.initialize(ctx, baseURL, authToken)
+func (c *Client) ListTools(ctx context.Context, baseURL, authToken, projectSlug string) ([]Tool, error) {
+	session, err := c.initialize(ctx, baseURL, authToken, projectSlug)
 	if err != nil {
 		return nil, err
 	}
-	raw, err := c.rpc(ctx, baseURL, authToken, session, "tools/list", map[string]any{})
+	raw, err := c.rpc(ctx, baseURL, authToken, session, projectSlug, "tools/list", withProjectMeta(map[string]any{}, projectSlug))
 	if err != nil {
 		return nil, err
 	}
@@ -54,18 +57,18 @@ func (c *Client) ListTools(ctx context.Context, baseURL, authToken string) ([]To
 	return payload.Tools, nil
 }
 
-func (c *Client) CallTool(ctx context.Context, baseURL, authToken, name string, arguments map[string]any) (string, error) {
+func (c *Client) CallTool(ctx context.Context, baseURL, authToken, projectSlug, name string, arguments map[string]any) (string, error) {
 	if arguments == nil {
 		arguments = map[string]any{}
 	}
-	session, err := c.initialize(ctx, baseURL, authToken)
+	session, err := c.initialize(ctx, baseURL, authToken, projectSlug)
 	if err != nil {
 		return "", err
 	}
-	raw, err := c.rpc(ctx, baseURL, authToken, session, "tools/call", map[string]any{
+	raw, err := c.rpc(ctx, baseURL, authToken, session, projectSlug, "tools/call", withProjectMeta(map[string]any{
 		"name":      name,
 		"arguments": arguments,
-	})
+	}, projectSlug))
 	if err != nil {
 		return "", err
 	}
@@ -73,38 +76,55 @@ func (c *Client) CallTool(ctx context.Context, baseURL, authToken, name string, 
 }
 
 func (c *Client) Ping(ctx context.Context, baseURL, authToken string) error {
-	_, err := c.initialize(ctx, baseURL, authToken)
+	_, err := c.initialize(ctx, baseURL, authToken, "")
 	return err
 }
 
-func (c *Client) initialize(ctx context.Context, baseURL, authToken string) (string, error) {
-	params := map[string]any{
+func withProjectMeta(params map[string]any, projectSlug string) map[string]any {
+	if params == nil {
+		params = map[string]any{}
+	}
+	slug := strings.TrimSpace(projectSlug)
+	if slug == "" {
+		return params
+	}
+	meta, _ := params["_meta"].(map[string]any)
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	meta[ProjectMetaKey] = slug
+	params["_meta"] = meta
+	return params
+}
+
+func (c *Client) initialize(ctx context.Context, baseURL, authToken, projectSlug string) (string, error) {
+	params := withProjectMeta(map[string]any{
 		"protocolVersion": protocolVersion,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "coding-agent-platform",
 			"version": "0.1.0",
 		},
-	}
-	_, sessionID, err := c.rpcWithSession(ctx, baseURL, authToken, "", "initialize", params, false)
+	}, projectSlug)
+	_, sessionID, err := c.rpcWithSession(ctx, baseURL, authToken, "", projectSlug, "initialize", params, false)
 	if err != nil {
 		return "", err
 	}
-	_, _, err = c.rpcWithSession(ctx, baseURL, authToken, sessionID, "notifications/initialized", nil, true)
+	_, _, err = c.rpcWithSession(ctx, baseURL, authToken, sessionID, projectSlug, "notifications/initialized", nil, true)
 	if err != nil {
 		return "", err
 	}
 	return sessionID, nil
 }
 
-func (c *Client) rpc(ctx context.Context, baseURL, authToken, sessionID, method string, params any) (json.RawMessage, error) {
-	result, _, err := c.rpcWithSession(ctx, baseURL, authToken, sessionID, method, params, false)
+func (c *Client) rpc(ctx context.Context, baseURL, authToken, sessionID, projectSlug, method string, params any) (json.RawMessage, error) {
+	result, _, err := c.rpcWithSession(ctx, baseURL, authToken, sessionID, projectSlug, method, params, false)
 	return result, err
 }
 
 func (c *Client) rpcWithSession(
 	ctx context.Context,
-	baseURL, authToken, sessionID, method string,
+	baseURL, authToken, sessionID, projectSlug, method string,
 	params any,
 	notification bool,
 ) (json.RawMessage, string, error) {
@@ -137,6 +157,9 @@ func (c *Client) rpcWithSession(
 	}
 	if sessionID != "" {
 		req.Header.Set("Mcp-Session-Id", sessionID)
+	}
+	if slug := strings.TrimSpace(projectSlug); slug != "" {
+		req.Header.Set("X-Coding-Tools-Project", slug)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

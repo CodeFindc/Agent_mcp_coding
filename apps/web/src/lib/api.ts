@@ -17,7 +17,8 @@ export type Project = {
 };
 
 export type RuntimeStatus = {
-  projectId: number;
+  userId?: number;
+  projectId?: number;
   status: "stopped" | "starting" | "running" | "error";
   containerName?: string;
   lastError?: string;
@@ -100,12 +101,17 @@ export const api = {
     }),
   deleteProject: (id: number) =>
     request<{ status: string }>(`/api/v1/projects/${id}`, { method: "DELETE" }),
+  userRuntime: () => request<RuntimeStatus>(`/api/v1/runtime`),
+  startUserRuntime: () =>
+    request<RuntimeStatus>(`/api/v1/runtime/start`, { method: "POST" }),
+  stopUserRuntime: () =>
+    request<RuntimeStatus>(`/api/v1/runtime/stop`, { method: "POST" }),
   projectRuntime: (id: number) => request<RuntimeStatus>(`/api/v1/projects/${id}/runtime`),
   startProjectRuntime: (id: number) =>
     request<RuntimeStatus>(`/api/v1/projects/${id}/runtime/start`, { method: "POST" }),
   stopProjectRuntime: (id: number) =>
     request<RuntimeStatus>(`/api/v1/projects/${id}/runtime/stop`, { method: "POST" }),
-  /** @deprecated use startProjectRuntime */
+  /** @deprecated use startProjectRuntime / startUserRuntime */
   activateProject: (id: number) =>
     request<RuntimeStatus>(`/api/v1/projects/${id}/activate`, { method: "POST" }),
   listRuntimes: () => request<RuntimeSummary>("/api/v1/runtimes"),
