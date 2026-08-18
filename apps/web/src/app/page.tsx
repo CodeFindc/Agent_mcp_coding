@@ -297,7 +297,6 @@ export default function HomePage() {
                 next.push({
                   kind: "assistant",
                   content: assistantBuf,
-                  reasoning: reasoningBuf || undefined,
                   isThinking: false,
                 });
               }
@@ -306,12 +305,25 @@ export default function HomePage() {
           }
           if (ev.type === "tool_start") {
             setStatusText(`调用工具 ${ev.tool}…`);
-            setMessages((prev) => [
-              ...prev,
-              { kind: "tool", tool: ev.tool || "tool", args: ev.args },
-            ]);
+            setMessages((prev) => {
+              const next = [...prev];
+              for (let i = next.length - 1; i >= 0; i--) {
+                const item = next[i];
+                if (item && item.kind === "assistant" && item.isThinking) {
+                  next[i] = { ...item, isThinking: false };
+                  break;
+                }
+              }
+              next.push({
+                kind: "tool",
+                tool: ev.tool || "tool",
+                args: ev.args,
+              });
+              return next;
+            });
           }
           if (ev.type === "tool_result") {
+            setStatusText(`工具 ${ev.tool} 执行完毕`);
             setMessages((prev) => {
               const next = [...prev];
               for (let i = next.length - 1; i >= 0; i--) {
@@ -324,13 +336,17 @@ export default function HomePage() {
               return next;
             });
             assistantBuf = "";
-            reasoningBuf = "";
           }
           if (ev.type === "error") {
             setError(ev.error || "unknown error");
           }
           if (ev.type === "done") {
             setStatusText("");
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.kind === "assistant" && m.isThinking ? { ...m, isThinking: false } : m,
+              ),
+            );
           }
         },
       );

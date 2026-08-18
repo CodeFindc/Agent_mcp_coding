@@ -1,13 +1,13 @@
 package llm
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -58,10 +58,22 @@ type ChatRequest struct {
 	Stream   bool             `json:"stream"`
 }
 
+type RawChoiceMessage struct {
+	Role             string          `json:"role"`
+	Content          any             `json:"content,omitempty"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	Reasoning        string          `json:"reasoning,omitempty"`
+	Thought          string          `json:"thought,omitempty"`
+	Thoughts         string          `json:"thoughts,omitempty"`
+	Name             string          `json:"name,omitempty"`
+	ToolCallID       string          `json:"tool_call_id,omitempty"`
+	ToolCalls        []ToolCall      `json:"tool_calls,omitempty"`
+}
+
 type ChatResponse struct {
 	Choices []struct {
-		Message      Message `json:"message"`
-		FinishReason string  `json:"finish_reason"`
+		Message      RawChoiceMessage `json:"message"`
+		FinishReason string           `json:"finish_reason"`
 	} `json:"choices"`
 }
 
@@ -81,6 +93,12 @@ func (c *Client) Chat(ctx context.Context, baseURL, apiKey string, req ChatReque
 	return &out, nil
 }
 
+var (
+	thinkTagRegex    = regexp.MustCompile(`(?is)<think>(.*?)</think>`)
+	thoughtTagRegex  = regexp.MustCompile(`(?is)<thought>(.*?)</thought>`)
+	thinkingTagRegex = regexp.MustCompile(`(?is)\[Thinking\](.*?)\[/Thinking\]`)
+)
+
 // ChatComplete calls completion for reliability in tool loops, extracts reasoning
 // and synthesizes content for the SSE layer.
 func (c *Client) ChatComplete(ctx context.Context, baseURL, apiKey string, req ChatRequest) (Message, string, error) {
@@ -92,27 +110,85 @@ func (c *Client) ChatComplete(ctx context.Context, baseURL, apiKey string, req C
 		return Message{}, "", fmt.Errorf("empty choices from model")
 	}
 	ch := resp.Choices[0]
-	msg := ch.Message
+	msg := sanitizeChoiceMessage(ch.Message)
 
-	// If reasoning_content was not provided natively, check for <think>...</think> tags
-	if msg.ReasoningContent == "" && strings.Contains(msg.Content, "<think>") {
-		start := strings.Index(msg.Content, "<think>")
-		end := strings.Index(msg.Content, "</think>")
-		if start != -1 && end != -1 && end > start {
-			msg.ReasoningContent = strings.TrimSpace(msg.Content[start+7 : end])
-			after := strings.TrimSpace(msg.Content[end+8:])
-			before := strings.TrimSpace(msg.Content[:start])
-			if before != "" && after != "" {
-				msg.Content = before + "\n" + after
-			} else if after != "" {
-				msg.Content = after
-			} else {
-				msg.Content = before
+	return msg, ch.FinishReason, nil
+}
+
+func sanitizeChoiceMessage(raw RawChoiceMessage) Message {
+	var contentStr string
+	var extractedReasoning string
+
+	// Extract reasoning from various provider fields
+	if raw.ReasoningContent != "" {
+		extractedReasoning = strings.TrimSpace(raw.ReasoningContent)
+	} else if raw.Reasoning != "" {
+		extractedReasoning = strings.TrimSpace(raw.Reasoning)
+	} else if raw.Thought != "" {
+		extractedReasoning = strings.TrimSpace(raw.Thought)
+	} else if raw.Thoughts != "" {
+		extractedReasoning = strings.TrimSpace(raw.Thoughts)
+	}
+
+	// Parse Content (could be string or array of parts)
+	switch v := raw.Content.(type) {
+	case string:
+		contentStr = v
+	case []any:
+		var sb strings.Builder
+		for _, part := range v {
+			if m, ok := part.(map[string]any); ok {
+				if t, ok := m["type"].(string); ok {
+					if t == "text" {
+						if txt, ok := m["text"].(string); ok {
+							sb.WriteString(txt)
+						}
+					} else if t == "thinking" || t == "thought" {
+						if th, ok := m["thinking"].(string); ok && extractedReasoning == "" {
+							extractedReasoning = th
+						} else if th, ok := m["thought"].(string); ok && extractedReasoning == "" {
+							extractedReasoning = th
+						}
+					}
+				}
+			}
+		}
+		contentStr = sb.String()
+	default:
+		if raw.Content != nil {
+			contentStr = fmt.Sprintf("%v", raw.Content)
+		}
+	}
+
+	// Extract tags like <think>...</think>, <thought>...</thought> from contentStr if reasoning is not yet set
+	if extractedReasoning == "" {
+		if m := thinkTagRegex.FindStringSubmatch(contentStr); len(m) > 1 {
+			extractedReasoning = strings.TrimSpace(m[1])
+			contentStr = strings.TrimSpace(thinkTagRegex.ReplaceAllString(contentStr, ""))
+		} else if m := thoughtTagRegex.FindStringSubmatch(contentStr); len(m) > 1 {
+			extractedReasoning = strings.TrimSpace(m[1])
+			contentStr = strings.TrimSpace(thoughtTagRegex.ReplaceAllString(contentStr, ""))
+		} else if m := thinkingTagRegex.FindStringSubmatch(contentStr); len(m) > 1 {
+			extractedReasoning = strings.TrimSpace(m[1])
+			contentStr = strings.TrimSpace(thinkingTagRegex.ReplaceAllString(contentStr, ""))
+		} else {
+			// Handle unclosed <think> tag
+			lower := strings.ToLower(contentStr)
+			if idx := strings.Index(lower, "<think>"); idx != -1 {
+				extractedReasoning = strings.TrimSpace(contentStr[idx+7:])
+				contentStr = strings.TrimSpace(contentStr[:idx])
 			}
 		}
 	}
 
-	return msg, ch.FinishReason, nil
+	return Message{
+		Role:             raw.Role,
+		Content:          contentStr,
+		ReasoningContent: extractedReasoning,
+		Name:             raw.Name,
+		ToolCallID:       raw.ToolCallID,
+		ToolCalls:        raw.ToolCalls,
+	}
 }
 
 func (c *Client) doJSON(ctx context.Context, baseURL, apiKey string, reqBody any, out any) error {
@@ -142,26 +218,6 @@ func (c *Client) doJSON(ctx context.Context, baseURL, apiKey string, reqBody any
 		return fmt.Errorf("llm status %d: %s", resp.StatusCode, truncate(string(body), 800))
 	}
 	return json.Unmarshal(body, out)
-}
-
-// Optional true SSE reader for future use.
-func readSSELines(r io.Reader, fn func(data string) error) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
-	for sc.Scan() {
-		line := sc.Text()
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "[DONE]" {
-			return nil
-		}
-		if err := fn(data); err != nil {
-			return err
-		}
-	}
-	return sc.Err()
 }
 
 func truncate(s string, n int) string {

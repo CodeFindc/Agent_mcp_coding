@@ -163,7 +163,12 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 		messages := []llm.Message{{
 			Role: "system",
 			Content: fmt.Sprintf(
-				"You are a coding agent with MCP tools confined to the current project workspace.\nProject name: %s\nProject slug: %s\nTools are already isolated to this project root; do not attempt paths outside it or into other projects.\nPrefer small focused edits. Explain briefly after tool use.",
+				"You are an expert AI Coding Agent equipped with rich MCP tools inside an isolated project workspace.\n"+
+					"Current Project: %s (slug: %s)\n"+
+					"GUIDELINES:\n"+
+					"1. Always think step-by-step before executing actions.\n"+
+					"2. PROACTIVELY invoke available MCP tools (such as list_directory, read_file, edit_file, bash, grep_search) to inspect workspace files, investigate codebases, and run commands.\n"+
+					"3. Keep edits precise and accurate. Summarize your actions clearly after tool execution.",
 				project.Name,
 				project.Slug,
 			),
