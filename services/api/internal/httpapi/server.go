@@ -95,6 +95,12 @@ func New(
 			r.Post("/projects/{id}/threads", s.handleCreateThread)
 			r.Get("/threads/{id}/messages", s.handleListMessages)
 			r.Post("/chat/send", s.handleChatSend)
+
+			// Project file explorer & git status/diff
+			r.Get("/projects/{id}/files", s.handleListProjectFiles)
+			r.Get("/projects/{id}/file", s.handleReadProjectFile)
+			r.Get("/projects/{id}/git/status", s.handleProjectGitStatus)
+			r.Get("/projects/{id}/git/diff", s.handleProjectGitDiff)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -435,6 +441,75 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePlatformInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.admin.PlatformInfo(s.auth.OIDCEnabled()))
+}
+
+func (s *Server) handleListProjectFiles(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	id, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	tree, err := s.projects.ListTree(user.ID, id)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tree)
+}
+
+func (s *Server) handleReadProjectFile(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	id, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	filePath := r.URL.Query().Get("path")
+	if filePath == "" {
+		writeErr(w, http.StatusBadRequest, "path query parameter is required")
+		return
+	}
+	content, err := s.projects.ReadFile(user.ID, id, filePath)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"path":    filePath,
+		"content": content,
+	})
+}
+
+func (s *Server) handleProjectGitStatus(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	id, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	status, err := s.projects.GetGitStatus(user.ID, id)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleProjectGitDiff(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	id, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid project id")
+		return
+	}
+	filePath := r.URL.Query().Get("path")
+	diff, err := s.projects.GetGitDiff(user.ID, id, filePath)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, diff)
 }
 
 func pathID(r *http.Request, name string) (uint, error) {

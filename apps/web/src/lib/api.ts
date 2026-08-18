@@ -66,6 +66,34 @@ export type Provider = {
   hasApiKey: boolean;
 };
 
+export type FileNode = {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modTime: string;
+  extension?: string;
+  children?: FileNode[];
+};
+
+export type GitFileChange = {
+  path: string;
+  status: string; // "M", "A", "D", "?"
+};
+
+export type GitStatusInfo = {
+  branch: string;
+  clean: boolean;
+  changes: GitFileChange[];
+};
+
+export type GitDiffResult = {
+  path: string;
+  oldContent: string;
+  newContent: string;
+  diffText: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -146,6 +174,18 @@ export const api = {
     request<{ status: string }>(`/api/v1/admin/providers/${id}`, { method: "DELETE" }),
   platform: () => request<Record<string, unknown>>("/api/v1/admin/platform"),
   listUsers: () => request<User[]>("/api/v1/admin/users"),
+  listProjectFiles: (projectId: number) =>
+    request<FileNode[]>(`/api/v1/projects/${projectId}/files`),
+  readProjectFile: (projectId: number, path: string) =>
+    request<{ path: string; content: string }>(
+      `/api/v1/projects/${projectId}/file?path=${encodeURIComponent(path)}`,
+    ),
+  getProjectGitStatus: (projectId: number) =>
+    request<GitStatusInfo>(`/api/v1/projects/${projectId}/git/status`),
+  getProjectGitDiff: (projectId: number, path?: string) =>
+    request<GitDiffResult>(
+      `/api/v1/projects/${projectId}/git/diff${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+    ),
 };
 
 export type ChatEvent = {

@@ -20,6 +20,8 @@ type Props = {
   isAdmin: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  onToggleFiles?: () => void;
+  isFileTreeOpen?: boolean;
 };
 
 export function Sidebar({
@@ -38,6 +40,8 @@ export function Sidebar({
   isAdmin,
   collapsed = false,
   onToggleCollapse,
+  onToggleFiles,
+  isFileTreeOpen = false,
 }: Props) {
   const [showNewProj, setShowNewProj] = useState(false);
   const [name, setName] = useState("");
@@ -89,7 +93,7 @@ export function Sidebar({
       </div>
 
       {!collapsed && (
-        <div className="p-3 border-b border-slate-800/60 shrink-0">
+        <div className="p-3 border-b border-slate-800/60 shrink-0 space-y-2">
           {/* New Chat Button */}
           <button
             onClick={() => onCreateThread()}
@@ -99,6 +103,29 @@ export function Sidebar({
             <span className="material-symbols-outlined text-[16px]">add</span>
             <span>新建会话</span>
           </button>
+
+          {/* Toggle File Tree Button (Similar to Zhipu / CodeGeeX) */}
+          {selectedProjectId && onToggleFiles && (
+            <button
+              onClick={onToggleFiles}
+              className={`w-full flex items-center justify-between py-1.5 px-3 rounded-xl border text-xs font-medium transition ${
+                isFileTreeOpen
+                  ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-sm"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-slate-800"
+              }`}
+              title="展开/收起项目目录文件树"
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-cyan-400">
+                  folder_open
+                </span>
+                <span>查看项目文件</span>
+              </div>
+              <span className="material-symbols-outlined text-[14px]">
+                {isFileTreeOpen ? "chevron_left" : "chevron_right"}
+              </span>
+            </button>
+          )}
         </div>
       )}
 
@@ -120,14 +147,27 @@ export function Sidebar({
               </button>
             </div>
           ) : (
-            <div className="flex justify-center mb-2">
+            <div className="flex flex-col items-center gap-2 mb-2">
               <button
                 onClick={() => setShowNewProj(!showNewProj)}
                 className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
-                title="项目管理"
+                title="创建项目"
               >
-                <span className="material-symbols-outlined text-[18px]">folder</span>
+                <span className="material-symbols-outlined text-[18px]">add</span>
               </button>
+              {onToggleFiles && (
+                <button
+                  onClick={onToggleFiles}
+                  className={`p-2 rounded-lg transition ${
+                    isFileTreeOpen
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  }`}
+                  title="查看文件"
+                >
+                  <span className="material-symbols-outlined text-[18px]">folder_open</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -178,12 +218,14 @@ export function Sidebar({
                       <span className="truncate">{p.name}</span>
                     </div>
                     {isSelected && (
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          isRunning ? "bg-emerald-400" : "bg-slate-500"
-                        }`}
-                        title={isRunning ? "工作区运行中" : "工作区空闲"}
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            isRunning ? "bg-emerald-400" : "bg-slate-500"
+                          }`}
+                          title={isRunning ? "工作区运行中" : "工作区空闲"}
+                        />
+                      </div>
                     )}
                   </button>
                 );

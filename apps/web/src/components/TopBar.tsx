@@ -16,6 +16,8 @@ type Props = {
   onToggleRightPanel: () => void;
   onToggleSidebar?: () => void;
   isSidebarCollapsed?: boolean;
+  isFileTreeOpen?: boolean;
+  onToggleFileTree?: () => void;
 };
 
 export function TopBar({
@@ -31,6 +33,8 @@ export function TopBar({
   onToggleRightPanel,
   onToggleSidebar,
   isSidebarCollapsed,
+  isFileTreeOpen,
+  onToggleFileTree,
 }: Props) {
   const isRunning = runtime?.status === "running";
   const isMcpReady = runtime?.mcpReady;
@@ -66,6 +70,22 @@ export function TopBar({
                 {projectSlug}
               </span>
             </>
+          )}
+
+          {/* Quick Files button beside project */}
+          {projectName && onToggleFileTree && (
+            <button
+              onClick={onToggleFileTree}
+              className={`ml-1 px-2 py-0.5 rounded-lg text-xs flex items-center gap-1 font-medium transition ${
+                isFileTreeOpen
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                  : "bg-slate-800/70 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/50"
+              }`}
+              title="展开项目文件树"
+            >
+              <span className="material-symbols-outlined text-[14px]">folder_open</span>
+              <span>查看文件</span>
+            </button>
           )}
         </div>
 
@@ -153,7 +173,7 @@ export function TopBar({
           {user.name?.slice(0, 1) || user.email?.slice(0, 1) || "U"}
         </div>
 
-        {/* Toggle Right Panel button */}
+        {/* Toggle Right Overview Panel button */}
         <button
           onClick={onToggleRightPanel}
           className={`p-1.5 rounded-lg text-xs transition flex items-center justify-center ${
@@ -161,9 +181,9 @@ export function TopBar({
               ? "bg-slate-800 text-blue-400 border border-slate-700"
               : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
           }`}
-          title={showRightPanel ? "关闭环境面板" : "打开环境面板"}
+          title={showRightPanel ? "关闭工作区概览" : "打开工作区概览"}
         >
-          <span className="material-symbols-outlined text-[18px]">view_sidebar</span>
+          <span className="material-symbols-outlined text-[18px]">space_dashboard</span>
         </button>
       </div>
     </header>

@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInput } from "@/components/ChatInput";
+import { FilePreviewPanel } from "@/components/FilePreviewPanel";
+import { FileTreeDrawer } from "@/components/FileTreeDrawer";
 import { MessageBubble, UiMsg } from "@/components/MessageBubble";
 import { RightPanel } from "@/components/RightPanel";
 import { Sidebar } from "@/components/Sidebar";
@@ -60,8 +62,13 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [statusText, setStatusText] = useState("");
   const [modelLabel, setModelLabel] = useState("模型");
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isFileTreeOpen, setIsFileTreeOpen] = useState(false);
+  const [previewInfo, setPreviewInfo] = useState<{
+    path: string;
+    mode: "preview" | "diff";
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -337,6 +344,18 @@ export default function HomePage() {
     }
   }
 
+  function handleSelectFile(path: string) {
+    setPreviewInfo({ path, mode: "preview" });
+  }
+
+  function handleSelectDiff(path: string) {
+    setPreviewInfo({ path, mode: "diff" });
+  }
+
+  function handleClosePreview() {
+    setPreviewInfo(null);
+  }
+
   async function logout() {
     await api.logout();
     router.replace("/login");
@@ -353,7 +372,7 @@ export default function HomePage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden flex bg-[#0a0b10] text-slate-100">
-      {/* Left Sidebar */}
+      {/* Col 1: Left Sidebar */}
       <Sidebar
         user={user}
         projects={projects}
@@ -370,6 +389,19 @@ export default function HomePage() {
         isAdmin={user.role === "admin"}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggleFiles={() => setIsFileTreeOpen(!isFileTreeOpen)}
+        isFileTreeOpen={isFileTreeOpen}
+      />
+
+      {/* Col 2: Project File Tree Drawer (toggled by 查看文件 like Zhipu) */}
+      <FileTreeDrawer
+        projectId={selectedProjectId}
+        projectName={selectedProject?.name}
+        isOpen={isFileTreeOpen}
+        onClose={() => setIsFileTreeOpen(false)}
+        onSelectFile={handleSelectFile}
+        onSelectDiff={handleSelectDiff}
+        selectedFilePath={previewInfo?.path}
       />
 
       {/* Main Content Area */}
@@ -387,10 +419,12 @@ export default function HomePage() {
           onToggleRightPanel={() => setShowRightPanel(!showRightPanel)}
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           isSidebarCollapsed={sidebarCollapsed}
+          isFileTreeOpen={isFileTreeOpen}
+          onToggleFileTree={() => setIsFileTreeOpen(!isFileTreeOpen)}
         />
 
         <div className="flex-1 flex overflow-hidden min-h-0 relative">
-          {/* Chat Stream & Interaction */}
+          {/* Col 3: Chat Stream & Interaction */}
           <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[#090a0f]">
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0">
               {error ? (
@@ -475,14 +509,25 @@ export default function HomePage() {
             />
           </main>
 
-          {/* Right Inspect Drawer */}
-          <RightPanel
-            project={selectedProject}
-            runtime={userRuntimeStatus}
-            modelLabel={modelLabel}
-            isOpen={showRightPanel}
-            onClose={() => setShowRightPanel(false)}
+          {/* Col 4: Rightmost Panel: Code Preview / Diff Viewer */}
+          <FilePreviewPanel
+            projectId={selectedProjectId}
+            filePath={previewInfo?.path || null}
+            mode={previewInfo?.mode || "preview"}
+            isOpen={Boolean(previewInfo)}
+            onClose={handleClosePreview}
           />
+
+          {/* Right Inspect Drawer (when preview is closed) */}
+          {!previewInfo && (
+            <RightPanel
+              project={selectedProject}
+              runtime={userRuntimeStatus}
+              modelLabel={modelLabel}
+              isOpen={showRightPanel}
+              onClose={() => setShowRightPanel(false)}
+            />
+          )}
         </div>
       </div>
     </div>
