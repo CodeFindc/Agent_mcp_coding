@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/services/api"
+export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 export HTTP_ADDR="${HTTP_ADDR:-:8080}"
 export DATABASE_URL="${DATABASE_URL:-file:$ROOT/data/platform.db?cache=shared&_fk=1}"
 export DATA_ROOT="${DATA_ROOT:-$ROOT/data/workspaces}"

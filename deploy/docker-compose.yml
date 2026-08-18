@@ -15,20 +15,13 @@ services:
       timeout: 5s
       retries: 10
 
-  # Optional local IdP for OIDC testing. Disable if using Dev Login only.
-  # keycloak:
-  #   image: quay.io/keycloak/keycloak:26.0
-  #   command: ["start-dev", "--http-port=8081"]
-  #   environment:
-  #     KEYCLOAK_ADMIN: admin
-  #     KEYCLOAK_ADMIN_PASSWORD: admin
-  #   ports:
-  #     - "8081:8081"
-
   api:
     build:
       context: ../services/api
       dockerfile: Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
     environment:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://cap:cap@postgres:5432/cap?sslmode=disable
@@ -46,10 +39,6 @@ services:
       DEFAULT_OPENAI_BASE_URL: ${DEFAULT_OPENAI_BASE_URL:-https://api.openai.com/v1}
       DEFAULT_OPENAI_API_KEY: ${DEFAULT_OPENAI_API_KEY:-}
       DEFAULT_OPENAI_MODEL: ${DEFAULT_OPENAI_MODEL:-gpt-4o-mini}
-      # OIDC_ISSUER: http://localhost:8081/realms/cap
-      # OIDC_CLIENT_ID: coding-agent-platform
-      # OIDC_CLIENT_SECRET: change-me
-      # OIDC_REDIRECT_URL: http://localhost:8080/api/v1/auth/oidc/callback
     volumes:
       - ../data/workspaces:/data/workspaces
       - /var/run/docker.sock:/var/run/docker.sock
@@ -58,14 +47,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # API needs to reach user containers on agent-internal and manage docker.
-    # Join default network + external agent-internal created by API on first start.
 
   web:
     build:
       context: ../apps/web
       dockerfile: Dockerfile
       args:
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
         NEXT_PUBLIC_API_BASE: http://localhost:8080
     environment:
       NEXT_PUBLIC_API_BASE: http://localhost:8080

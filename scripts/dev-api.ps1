@@ -1,6 +1,7 @@
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location "$Root\services\api"
 
+$env:GOPROXY = if ($env:GOPROXY) { $env:GOPROXY } else { "https://goproxy.cn,direct" }
 $env:HTTP_ADDR = if ($env:HTTP_ADDR) { $env:HTTP_ADDR } else { ":8080" }
 $env:DATABASE_URL = if ($env:DATABASE_URL) { $env:DATABASE_URL } else { "file:$Root\data\platform.db?cache=shared&_fk=1" }
 $env:DATA_ROOT = if ($env:DATA_ROOT) { $env:DATA_ROOT } else { "$Root\data\workspaces" }
