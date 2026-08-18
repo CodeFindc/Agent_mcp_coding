@@ -9,7 +9,8 @@ type Props = {
 };
 
 export function ToolCallCard({ tool, args, result }: Props) {
-  const [expanded, setExpanded] = useState(true);
+  // Default collapsed as requested
+  const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const isPending = result === undefined;
@@ -25,12 +26,14 @@ export function ToolCallCard({ tool, args, result }: Props) {
   const meta = getToolMeta(tool);
 
   return (
-    <div className="w-full my-2.5">
-      <div className="rounded-xl border border-slate-800 bg-[#0c0e15] overflow-hidden text-xs shadow-md shadow-black/30">
+    <div className="w-full my-2">
+      <div className="rounded-xl border border-slate-800 bg-[#0c0e15] overflow-hidden text-xs shadow-sm">
         {/* Header */}
         <div
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center justify-between px-3.5 py-2.5 bg-slate-900/70 hover:bg-slate-900 cursor-pointer select-none transition border-b border-slate-800/60"
+          className={`flex items-center justify-between px-3.5 py-2.5 bg-slate-900/70 hover:bg-slate-900 cursor-pointer select-none transition ${
+            expanded ? "border-b border-slate-800/60" : ""
+          }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Tool Icon */}
@@ -64,8 +67,11 @@ export function ToolCallCard({ tool, args, result }: Props) {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-slate-500 text-[18px]">
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <span className="text-[11px] text-slate-500 hidden sm:inline">
+              {expanded ? "收起" : "详情"}
+            </span>
+            <span className="material-symbols-outlined text-[18px]">
               {expanded ? "expand_less" : "expand_more"}
             </span>
           </div>
@@ -73,7 +79,7 @@ export function ToolCallCard({ tool, args, result }: Props) {
 
         {/* Content Details */}
         {expanded && (
-          <div className="p-3.5 space-y-3 bg-[#08090e]">
+          <div className="p-3.5 space-y-3 bg-[#08090e] animate-in fade-in-50 duration-200">
             {/* Specific tool parameter view */}
             {renderToolParameters(tool, parsedArgs, args)}
 
