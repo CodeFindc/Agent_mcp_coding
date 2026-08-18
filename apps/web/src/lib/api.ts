@@ -50,6 +50,7 @@ export type ChatMessage = {
   threadId: number;
   role: string;
   content: string;
+  reasoningContent?: string;
   toolCallsJson?: string;
   toolCallId?: string;
   name?: string;

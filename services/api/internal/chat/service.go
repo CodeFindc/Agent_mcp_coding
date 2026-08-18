@@ -183,13 +183,18 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 			return err
 		}
 
+		if msg.ReasoningContent != "" {
+			emit(Event{Type: "assistant_reasoning", Content: msg.ReasoningContent, ThreadID: thread.ID})
+		}
+
 		if len(msg.ToolCalls) > 0 {
 			toolJSON, _ := json.Marshal(msg.ToolCalls)
 			assistant := models.ChatMessage{
-				ThreadID:      thread.ID,
-				Role:          "assistant",
-				Content:       msg.Content,
-				ToolCallsJSON: string(toolJSON),
+				ThreadID:         thread.ID,
+				Role:             "assistant",
+				Content:          msg.Content,
+				ReasoningContent: msg.ReasoningContent,
+				ToolCallsJSON:    string(toolJSON),
 			}
 			_ = s.db.Create(&assistant).Error
 			if msg.Content != "" {
@@ -206,7 +211,7 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 				args := map[string]any{}
 				_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				emit(Event{Type: "tool_start", Tool: tc.Function.Name, Args: tc.Function.Arguments, ThreadID: thread.ID})
-					result, callErr := s.mcp.CallTool(ctx, endpoint, token, project.Slug, tc.Function.Name, args)
+				result, callErr := s.mcp.CallTool(ctx, endpoint, token, project.Slug, tc.Function.Name, args)
 				if callErr != nil {
 					result = callErr.Error()
 				}
@@ -215,7 +220,7 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 				if len(resultForModel) > 24000 {
 					resultForModel = resultForModel[:24000] + "\n…[truncated]"
 				}
-				emit(Event{Type: "tool_result", Tool: tc.Function.Name, Result: truncate(result, 4000), ThreadID: thread.ID})
+				emit(Event{Type: "tool_result", Tool: tc.Function.Name, Result: truncate(result, 8000), ThreadID: thread.ID})
 				toolMsg := models.ChatMessage{
 					ThreadID:   thread.ID,
 					Role:       "tool",
@@ -235,7 +240,12 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 		}
 
 		// final assistant text
-		assistant := models.ChatMessage{ThreadID: thread.ID, Role: "assistant", Content: msg.Content}
+		assistant := models.ChatMessage{
+			ThreadID:         thread.ID,
+			Role:             "assistant",
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+		}
 		if err := s.db.Create(&assistant).Error; err != nil {
 			return err
 		}
@@ -291,7 +301,13 @@ func mcpToolsToLLM(tools []mcp.Tool) []llm.ToolDefinition {
 func dbMessagesToLLM(items []models.ChatMessage) []llm.Message {
 	out := make([]llm.Message, 0, len(items))
 	for _, m := range items {
-		msg := llm.Message{Role: m.Role, Content: m.Content, Name: m.Name, ToolCallID: m.ToolCallID}
+		msg := llm.Message{
+			Role:             m.Role,
+			Content:          m.Content,
+			ReasoningContent: m.ReasoningContent,
+			Name:             m.Name,
+			ToolCallID:       m.ToolCallID,
+		}
 		if m.ToolCallsJSON != "" {
 			var tcs []llm.ToolCall
 			if json.Unmarshal([]byte(m.ToolCallsJSON), &tcs) == nil {

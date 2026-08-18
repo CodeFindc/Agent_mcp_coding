@@ -64,14 +64,15 @@ type ChatThread struct {
 }
 
 type ChatMessage struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	ThreadID      uint      `gorm:"index;not null" json:"threadId"`
-	Role          string    `gorm:"size:32;not null" json:"role"`
-	Content       string    `gorm:"type:text" json:"content"`
-	ToolCallsJSON string    `gorm:"type:text" json:"toolCallsJson,omitempty"`
-	ToolCallID    string    `gorm:"size:128" json:"toolCallId,omitempty"`
-	Name          string    `gorm:"size:160" json:"name,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	ThreadID         uint      `gorm:"index;not null" json:"threadId"`
+	Role             string    `gorm:"size:32;not null" json:"role"`
+	Content          string    `gorm:"type:text" json:"content"`
+	ReasoningContent string    `gorm:"type:text" json:"reasoningContent,omitempty"`
+	ToolCallsJSON    string    `gorm:"type:text" json:"toolCallsJson,omitempty"`
+	ToolCallID       string    `gorm:"size:128" json:"toolCallId,omitempty"`
+	Name             string    `gorm:"size:160" json:"name,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type ModelProvider struct {

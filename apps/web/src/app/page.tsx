@@ -238,6 +238,7 @@ export default function HomePage() {
     setMessages((prev) => [...prev, { kind: "user", content }]);
 
     let assistantBuf = "";
+    let reasoningBuf = "";
     try {
       await sendChat(
         {
@@ -250,15 +251,48 @@ export default function HomePage() {
             setThreadId(ev.threadId);
             api.listThreads(selectedProjectId).then(setThreads).catch(() => undefined);
           }
-          if (ev.type === "assistant_delta" && ev.content) {
-            assistantBuf += ev.content;
+          if (ev.type === "assistant_reasoning" && ev.content) {
+            reasoningBuf += ev.content;
+            setStatusText("正在深度思考…");
             setMessages((prev) => {
               const next = [...prev];
               const last = next[next.length - 1];
               if (last && last.kind === "assistant") {
-                next[next.length - 1] = { kind: "assistant", content: assistantBuf };
+                next[next.length - 1] = {
+                  ...last,
+                  reasoning: reasoningBuf,
+                  isThinking: true,
+                };
               } else {
-                next.push({ kind: "assistant", content: assistantBuf });
+                next.push({
+                  kind: "assistant",
+                  content: "",
+                  reasoning: reasoningBuf,
+                  isThinking: true,
+                });
+              }
+              return next;
+            });
+          }
+          if (ev.type === "assistant_delta" && ev.content) {
+            assistantBuf += ev.content;
+            setStatusText("正在组织回答…");
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last && last.kind === "assistant") {
+                next[next.length - 1] = {
+                  ...last,
+                  content: assistantBuf,
+                  isThinking: false,
+                };
+              } else {
+                next.push({
+                  kind: "assistant",
+                  content: assistantBuf,
+                  reasoning: reasoningBuf || undefined,
+                  isThinking: false,
+                });
               }
               return next;
             });
@@ -283,6 +317,7 @@ export default function HomePage() {
               return next;
             });
             assistantBuf = "";
+            reasoningBuf = "";
           }
           if (ev.type === "error") {
             setError(ev.error || "unknown error");
@@ -456,11 +491,47 @@ export default function HomePage() {
 
 function dbToUi(msgs: ChatMessage[]): UiMsg[] {
   const out: UiMsg[] = [];
+  const toolCallArgsMap = new Map<string, { name: string; args: string }>();
+
   for (const m of msgs) {
-    if (m.role === "user" || m.role === "assistant") {
-      out.push({ kind: m.role, content: m.content });
+    if (m.role === "user") {
+      out.push({ kind: "user", content: m.content });
+    } else if (m.role === "assistant") {
+      if (m.toolCallsJson) {
+        try {
+          const tcs = JSON.parse(m.toolCallsJson);
+          if (Array.isArray(tcs)) {
+            for (const tc of tcs) {
+              if (tc.id) {
+                toolCallArgsMap.set(tc.id, {
+                  name: tc.function?.name || "tool",
+                  args: tc.function?.arguments || "",
+                });
+              }
+            }
+          }
+        } catch {
+          /* ignore malformed */
+        }
+      }
+
+      if (m.content || m.reasoningContent) {
+        out.push({
+          kind: "assistant",
+          content: m.content,
+          reasoning: m.reasoningContent,
+          isThinking: false,
+        });
+      }
     } else if (m.role === "tool") {
-      out.push({ kind: "tool", tool: m.name || "tool", result: m.content });
+      const match = m.toolCallId ? toolCallArgsMap.get(m.toolCallId) : null;
+      out.push({
+        kind: "tool",
+        tool: m.name || match?.name || "tool",
+        args: match?.args,
+        result: m.content,
+        toolCallId: m.toolCallId,
+      });
     }
   }
   return out;

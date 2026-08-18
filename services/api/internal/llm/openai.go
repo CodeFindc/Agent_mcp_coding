@@ -21,11 +21,12 @@ func NewClient() *Client {
 }
 
 type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	Name       string     `json:"name,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	Role             string     `json:"role"`
+	Content          string     `json:"content,omitempty"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	Name             string     `json:"name,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type ToolCall struct {
@@ -80,8 +81,8 @@ func (c *Client) Chat(ctx context.Context, baseURL, apiKey string, req ChatReque
 	return &out, nil
 }
 
-// ChatStream calls non-stream completion for reliability in tool loops, then
-// synthesizes content for the SSE layer. Streaming tokens can be added later.
+// ChatComplete calls completion for reliability in tool loops, extracts reasoning
+// and synthesizes content for the SSE layer.
 func (c *Client) ChatComplete(ctx context.Context, baseURL, apiKey string, req ChatRequest) (Message, string, error) {
 	resp, err := c.Chat(ctx, baseURL, apiKey, req)
 	if err != nil {
@@ -91,7 +92,27 @@ func (c *Client) ChatComplete(ctx context.Context, baseURL, apiKey string, req C
 		return Message{}, "", fmt.Errorf("empty choices from model")
 	}
 	ch := resp.Choices[0]
-	return ch.Message, ch.FinishReason, nil
+	msg := ch.Message
+
+	// If reasoning_content was not provided natively, check for <think>...</think> tags
+	if msg.ReasoningContent == "" && strings.Contains(msg.Content, "<think>") {
+		start := strings.Index(msg.Content, "<think>")
+		end := strings.Index(msg.Content, "</think>")
+		if start != -1 && end != -1 && end > start {
+			msg.ReasoningContent = strings.TrimSpace(msg.Content[start+7 : end])
+			after := strings.TrimSpace(msg.Content[end+8:])
+			before := strings.TrimSpace(msg.Content[:start])
+			if before != "" && after != "" {
+				msg.Content = before + "\n" + after
+			} else if after != "" {
+				msg.Content = after
+			} else {
+				msg.Content = before
+			}
+		}
+	}
+
+	return msg, ch.FinishReason, nil
 }
 
 func (c *Client) doJSON(ctx context.Context, baseURL, apiKey string, reqBody any, out any) error {
