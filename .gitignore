@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+dist/
+bin/
+data/workspaces/**
+!data/workspaces/.gitkeep
+data/*.db
+data/*.db-*
+.env
+.env.local
+*.exe
+*.log
+.DS_Store
+services/api/api
+apps/web/.turbo
