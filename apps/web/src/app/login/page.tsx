@@ -43,69 +43,83 @@ function LoginForm() {
   }
 
   return (
-    <div className="mac-window w-full max-w-md p-10">
-      <div className="absolute top-5 left-6 flex items-center gap-2">
-        <span className="t-light t-close" />
-        <span className="t-light t-min" />
-        <span className="t-light t-max" />
-      </div>
-      <div className="mb-8 mt-6">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-strong)] to-[var(--accent)] flex items-center justify-center text-white font-bold text-xl shadow-sm">
-            C
-          </div>
-          <div>
-            <div className="text-sm muted">Coding Agent Platform</div>
-            <div className="text-[11px] muted opacity-70">一用户一容器 · 多项目并行</div>
-          </div>
+    <div className="w-full max-w-md p-8 rounded-2xl border border-slate-800 bg-[#121520]/90 backdrop-blur-xl shadow-2xl">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/20">
+          <span className="material-symbols-outlined text-[22px]">terminal</span>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">登录工作区</h1>
-        <p className="muted mt-2 text-sm leading-6">
-          每用户独立 coding-tools 容器与项目目录。开发环境可用 Dev Login；生产请配置 OIDC。
+        <div>
+          <h1 className="text-base font-bold text-slate-100 tracking-tight">Coding Agent Platform</h1>
+          <p className="text-xs text-slate-400">云端智能编程工作台</p>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-white tracking-tight">欢迎登录</h2>
+        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+          每个账号配备专属沙箱容器与项目隔离环境，开箱即用。
         </p>
       </div>
 
       {error ? (
-        <div className="mb-4 rounded-xl border border-[rgba(255,107,122,0.35)] bg-[rgba(255,107,122,0.1)] px-3 py-2 text-sm text-[var(--error)]">
-          {error}
+        <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-300 flex items-center gap-2">
+          <span className="material-symbols-outlined text-[16px]">error</span>
+          <span>{error}</span>
         </div>
       ) : null}
 
       {devEnabled ? (
-        <form onSubmit={onDevLogin} className="space-y-3">
-          <label className="block text-sm">
-            <span className="muted">Email</span>
+        <form onSubmit={onDevLogin} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1.5">邮箱账号</label>
             <input
-              className="input mt-1"
+              className="w-full bg-[#0a0b10] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="muted">Name</span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1.5">用户名</label>
             <input
-              className="input mt-1"
+              className="w-full bg-[#0a0b10] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="开发者昵称"
             />
-          </label>
-          <button className="btn btn-primary w-full" disabled={loading} type="submit">
-            {loading ? "登录中…" : "Dev Login"}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition duration-150 shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>登录中…</span>
+              </>
+            ) : (
+              <span>进入工作区 (Dev Login)</span>
+            )}
           </button>
         </form>
       ) : null}
 
       {oidcEnabled ? (
         <a
-          className="btn btn-primary mt-3 block w-full text-center"
+          className="mt-3 block w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-center font-medium text-xs border border-slate-700 transition"
           href={`${api.base}/api/v1/auth/oidc/login`}
         >
-          使用 OIDC 登录
+          使用 OIDC 单点登录
         </a>
       ) : null}
 
       {!devEnabled && !oidcEnabled ? (
-        <p className="muted text-sm">未启用任何登录方式。请配置 DEV_AUTH_ENABLED 或 OIDC_。</p>
+        <p className="text-xs text-slate-400 text-center py-4">
+          未启用任何登录方式，请在服务端环境变量中配置 DEV_AUTH_ENABLED 或 OIDC 参数。
+        </p>
       ) : null}
     </div>
   );
@@ -113,8 +127,15 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <Suspense fallback={<div className="muted">加载登录页…</div>}>
+    <main className="min-h-screen w-screen flex items-center justify-center p-4 bg-[#0a0b10]">
+      <Suspense
+        fallback={
+          <div className="text-xs text-slate-400 flex items-center gap-2">
+            <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span>加载中…</span>
+          </div>
+        }
+      >
         <LoginForm />
       </Suspense>
     </main>

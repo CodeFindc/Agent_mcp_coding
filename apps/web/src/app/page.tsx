@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInput } from "@/components/ChatInput";
 import { MessageBubble, UiMsg } from "@/components/MessageBubble";
 import { RightPanel } from "@/components/RightPanel";
@@ -18,6 +18,33 @@ import {
   User,
 } from "@/lib/api";
 
+const STARTER_PROMPTS = [
+  {
+    title: "探索项目结构",
+    desc: "分析工作区中的文件目录并总结项目架构",
+    prompt: "请列出当前项目根目录的文件结构，并简要概括各目录的核心作用。",
+    icon: "account_tree",
+  },
+  {
+    title: "编写测试用例",
+    desc: "为核心逻辑生成单元测试与边界用例",
+    prompt: "请针对项目中的核心函数或 API 编写自动化测试脚本。",
+    icon: "fact_check",
+  },
+  {
+    title: "依赖与环境诊断",
+    desc: "检查容器环境与 package.json / 依赖项",
+    prompt: "请帮我检查当前项目的依赖配置，并测试环境是否正常。",
+    icon: "build",
+  },
+  {
+    title: "运行终端指令",
+    desc: "在隔离容器中执行编译、构建或格式化",
+    prompt: "请在项目目录下执行 build 构建命令，并查看输出日志。",
+    icon: "terminal",
+  },
+];
+
 export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -33,6 +60,18 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [statusText, setStatusText] = useState("");
   const [modelLabel, setModelLabel] = useState("模型");
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, statusText]);
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || null,
@@ -189,9 +228,9 @@ export default function HomePage() {
     }
   }
 
-  async function onSend() {
-    if (!selectedProjectId || !input.trim() || busy) return;
-    const content = input.trim();
+  async function doSend(textToSend: string) {
+    if (!selectedProjectId || !textToSend.trim() || busy) return;
+    const content = textToSend.trim();
     setInput("");
     setBusy(true);
     setError("");
@@ -249,7 +288,7 @@ export default function HomePage() {
             setError(ev.error || "unknown error");
           }
           if (ev.type === "done") {
-            setStatusText("完成");
+            setStatusText("");
           }
         },
       );
@@ -259,6 +298,7 @@ export default function HomePage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+      setStatusText("");
     }
   }
 
@@ -269,92 +309,145 @@ export default function HomePage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <span className="muted text-sm">加载中…</span>
+      <main className="h-screen w-screen flex flex-col items-center justify-center bg-[#0a0b10] text-slate-400 gap-3">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs tracking-wider">正在加载工作区…</span>
       </main>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-8">
-      <div className="mac-window w-full h-[calc(100dvh-2rem)] max-w-[1600px] max-h-[900px] flex">
-        <Sidebar
-          user={user}
-          projects={projects}
-          selectedProjectId={selectedProjectId}
-          onSelectProject={setSelectedProjectId}
-          onCreateProject={createProject}
-          threads={threads}
-          threadId={threadId}
-          onSelectThread={setThreadId}
-          onCreateThread={newThread}
+    <div className="h-screen w-screen overflow-hidden flex bg-[#0a0b10] text-slate-100">
+      {/* Left Sidebar */}
+      <Sidebar
+        user={user}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={setSelectedProjectId}
+        onCreateProject={createProject}
+        threads={threads}
+        threadId={threadId}
+        onSelectThread={setThreadId}
+        onCreateThread={newThread}
+        runtime={userRuntimeStatus}
+        busy={busy}
+        onLogout={logout}
+        isAdmin={user.role === "admin"}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <TopBar
+          projectName={selectedProject?.name}
+          projectSlug={selectedProject?.slug}
           runtime={userRuntimeStatus}
           busy={busy}
-          onLogout={logout}
+          onStart={startSelected}
+          onStop={stopSelected}
           isAdmin={user.role === "admin"}
+          user={user}
+          showRightPanel={showRightPanel}
+          onToggleRightPanel={() => setShowRightPanel(!showRightPanel)}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          isSidebarCollapsed={sidebarCollapsed}
         />
 
-        <div className="flex-1 flex flex-col min-w-0">
-          <TopBar
-            projectName={selectedProject?.name}
-            projectSlug={selectedProject?.slug}
-            runtime={userRuntimeStatus}
-            busy={busy}
-            onStart={startSelected}
-            onStop={stopSelected}
-            isAdmin={user.role === "admin"}
-            user={user}
-          />
-
-          <div className="flex-1 flex overflow-hidden min-h-0">
-            <main className="flex-1 flex flex-col min-w-0">
-              <div className="flex-1 overflow-y-auto p-5 space-y-3 min-h-0">
-                {error ? (
-                  <div className="rounded-xl border border-[rgba(255,107,122,0.35)] bg-[rgba(255,107,122,0.1)] px-3 py-2 text-sm text-[var(--error)]">
-                    {error}
+        <div className="flex-1 flex overflow-hidden min-h-0 relative">
+          {/* Chat Stream & Interaction */}
+          <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[#090a0f]">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0">
+              {error ? (
+                <div className="w-full max-w-4xl mx-auto rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">error</span>
+                    <span>{error}</span>
                   </div>
-                ) : null}
-                {messages.map((m, idx) => (
-                  <MessageBubble key={idx} msg={m} />
-                ))}
-                {!messages.length ? (
-                  <div className="glass-pane p-6 muted text-sm leading-7">
-                    在左侧选择或创建项目，即可开始对话。
-                    <br />
-                    每位用户一个 coding-tools 容器；多个项目共享该容器，在进程内按项目 slug
-                    隔离。
-                    <br />
-                    对话会自动 EnsureRunning 用户容器，并通过 MCP _meta 传入当前项目 slug。
-                  </div>
-                ) : null}
-              </div>
-              {statusText ? (
-                <div className="px-5 pb-1 text-xs muted flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[14px] animate-pulse">
-                    keep
-                  </span>
-                  {statusText}
+                  <button
+                    onClick={() => setError("")}
+                    className="hover:text-white p-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
                 </div>
               ) : null}
-              <ChatInput
-                value={input}
-                onChange={setInput}
-                onSend={onSend}
-                disabled={!selectedProjectId}
-                busy={busy}
-                placeholder={
-                  selectedProject ? `在「${selectedProject.name}」中提问…` : "请先选择项目"
-                }
-                modelLabel={modelLabel}
-              />
-            </main>
 
-            <RightPanel
-              project={selectedProject}
-              runtime={userRuntimeStatus}
+              {messages.length > 0 ? (
+                messages.map((m, idx) => <MessageBubble key={idx} msg={m} />)
+              ) : (
+                /* Welcome Hero Screen */
+                <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto px-4 text-center my-auto py-8">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-xl shadow-blue-500/20 mb-5">
+                    <span className="material-symbols-outlined text-[28px]">smart_toy</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2">
+                    你好，{user.name || "开发者"}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-400 max-w-lg mb-8 leading-relaxed">
+                    这是专为你配置的云端 AI 编程工作区。每个会话均配备专属沙箱与 MCP 工具链，为你提供自动化代码分析、构建与调试能力。
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
+                    {STARTER_PROMPTS.map((item, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setInput(item.prompt);
+                        }}
+                        className="p-3.5 rounded-xl border border-slate-800/90 bg-[#11141e]/70 hover:bg-[#161a27] hover:border-slate-700 transition-all text-left group shadow-sm flex items-start gap-3"
+                      >
+                        <span className="material-symbols-outlined text-[20px] text-blue-400 group-hover:text-cyan-400 transition mt-0.5">
+                          {item.icon}
+                        </span>
+                        <div>
+                          <div className="text-xs font-semibold text-slate-200 group-hover:text-white transition">
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                            {item.desc}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {statusText ? (
+                <div className="w-full max-w-4xl mx-auto px-4 py-1.5 text-xs text-slate-400 flex items-center gap-2 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                  <span>{statusText}</span>
+                </div>
+              ) : null}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Floating Chat Input */}
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={() => doSend(input)}
+              disabled={!selectedProjectId}
+              busy={busy}
+              placeholder={
+                selectedProject
+                  ? `在「${selectedProject.name}」中向 Coding Agent 提问…`
+                  : "请先在左侧选择或创建项目"
+              }
               modelLabel={modelLabel}
             />
-          </div>
+          </main>
+
+          {/* Right Inspect Drawer */}
+          <RightPanel
+            project={selectedProject}
+            runtime={userRuntimeStatus}
+            modelLabel={modelLabel}
+            isOpen={showRightPanel}
+            onClose={() => setShowRightPanel(false)}
+          />
         </div>
       </div>
     </div>

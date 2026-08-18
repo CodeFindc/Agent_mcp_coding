@@ -1,4 +1,6 @@
-import { FormEvent } from "react";
+"use client";
+
+import { FormEvent, useRef, useEffect } from "react";
 
 type Props = {
   value: string;
@@ -19,57 +21,89 @@ export function ChatInput({
   placeholder,
   modelLabel,
 }: Props) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+    }
+  }, [value]);
+
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (!value.trim() || disabled || busy) return;
     onSend();
   }
 
   return (
-    <form onSubmit={submit} className="p-4">
-      <div className="bg-black/40 border border-white/10 rounded-2xl p-3 flex flex-col shadow-lg">
-        <textarea
-          className="bg-transparent border-none resize-none text-sm text-[var(--text)] focus:outline-none w-full min-h-[56px] max-h-40"
-          placeholder={placeholder || "输入消息…"}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              onSend();
-            }
-          }}
-        />
-        <div className="flex items-center justify-between mt-2 border-t border-white/5 pt-2">
-          <div className="flex gap-1">
-            <button
-              type="button"
-              className="p-1.5 text-[var(--muted)] hover:text-[var(--text)] hover:bg-white/5 rounded transition"
-            >
-              <span className="material-symbols-outlined text-sm">add</span>
-            </button>
-            <button
-              type="button"
-              className="p-1.5 text-[var(--muted)] hover:text-[var(--text)] hover:bg-white/5 rounded transition"
-            >
-              <span className="material-symbols-outlined text-sm">motion_photos_on</span>
-            </button>
-          </div>
+    <div className="w-full max-w-4xl mx-auto px-4 pb-4">
+      <form
+        onSubmit={submit}
+        className="relative rounded-2xl border border-slate-800 bg-[#121520]/90 backdrop-blur-xl shadow-2xl transition-all duration-200 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20"
+      >
+        <div className="p-3.5 pb-2">
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            className="w-full bg-transparent resize-none text-[13.5px] text-slate-100 placeholder-slate-500 focus:outline-none max-h-48 leading-relaxed font-sans"
+            placeholder={placeholder || "问点什么，或输入指令编写代码…"}
+            value={value}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (value.trim() && !disabled && !busy) {
+                  onSend();
+                }
+              }
+            }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-800/60 text-xs text-slate-400">
           <div className="flex items-center gap-2">
-            <span className="chip">
-              {modelLabel}
-              <span className="material-symbols-outlined text-[12px]">expand_more</span>
+            {/* Model Badge */}
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/50 text-slate-300 text-[11px] font-medium select-none shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+              <span className="max-w-[140px] truncate">{modelLabel}</span>
+            </div>
+
+            {/* MCP Tools Badge */}
+            <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/40 text-slate-400 text-[11px] select-none border border-slate-800">
+              <span className="material-symbols-outlined text-[13px] text-cyan-400">bolt</span>
+              <span>MCP Tools Enabled</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="hidden md:inline text-[11px] text-slate-500 select-none">
+              ↵ 发送 &bull; Shift + ↵ 换行
             </span>
+
             <button
               type="submit"
               disabled={disabled || busy || !value.trim()}
-              className="w-8 h-8 rounded-full bg-[rgba(75,142,255,0.25)] text-[var(--accent)] hover:bg-[rgba(75,142,255,0.4)] flex items-center justify-center transition disabled:opacity-40"
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition duration-150 ${
+                value.trim() && !busy && !disabled
+                  ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 cursor-pointer active:scale-95"
+                  : "bg-slate-800/80 text-slate-500 cursor-not-allowed"
+              }`}
+              title="发送"
             >
-              <span className="material-symbols-outlined text-sm">arrow_upward</span>
+              {busy ? (
+                <span className="w-4 h-4 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+              )}
             </button>
           </div>
         </div>
+      </form>
+      <div className="text-center mt-2 text-[11px] text-slate-500">
+        AI 可能会生成有偏差的代码，请在关键生产环境中进行校验与测试。
       </div>
-    </form>
+    </div>
   );
 }
