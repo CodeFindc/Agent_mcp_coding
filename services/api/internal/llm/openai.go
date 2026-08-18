@@ -1,15 +1,17 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
+	"sort"
 	"strings"
 	"time"
+
+	openai "github.com/sashabaranov/go-openai"
 )
 
 type Client struct {
@@ -58,173 +60,262 @@ type ChatRequest struct {
 	Stream   bool             `json:"stream"`
 }
 
-type RawChoiceMessage struct {
-	Role             string          `json:"role"`
-	Content          any             `json:"content,omitempty"`
-	ReasoningContent string          `json:"reasoning_content,omitempty"`
-	Reasoning        string          `json:"reasoning,omitempty"`
-	Thought          string          `json:"thought,omitempty"`
-	Thoughts         string          `json:"thoughts,omitempty"`
-	Name             string          `json:"name,omitempty"`
-	ToolCallID       string          `json:"tool_call_id,omitempty"`
-	ToolCalls        []ToolCall      `json:"tool_calls,omitempty"`
+type StreamCallbacks struct {
+	OnReasoningChunk func(chunk string)
+	OnContentChunk   func(chunk string)
 }
 
-type ChatResponse struct {
-	Choices []struct {
-		Message      RawChoiceMessage `json:"message"`
-		FinishReason string           `json:"finish_reason"`
-	} `json:"choices"`
-}
-
-type StreamDelta struct {
-	Content          string
-	ToolCalls        []ToolCall
-	FinishReason     string
-	RawToolCallIndex map[int]ToolCall
-}
-
-func (c *Client) Chat(ctx context.Context, baseURL, apiKey string, req ChatRequest) (*ChatResponse, error) {
-	req.Stream = false
-	var out ChatResponse
-	if err := c.doJSON(ctx, baseURL, apiKey, req, &out); err != nil {
-		return nil, err
+func (c *Client) getOpenAIClient(baseURL, apiKey string) *openai.Client {
+	config := openai.DefaultConfig(apiKey)
+	if baseURL != "" {
+		cleanBase := strings.TrimRight(baseURL, "/")
+		if !strings.HasSuffix(cleanBase, "/v1") && !strings.Contains(cleanBase, "/v1/") {
+			cleanBase += "/v1"
+		}
+		config.BaseURL = cleanBase
 	}
-	return &out, nil
+	if c.httpClient != nil {
+		config.HTTPClient = c.httpClient
+	}
+	return openai.NewClientWithConfig(config)
 }
 
-var (
-	thinkTagRegex    = regexp.MustCompile(`(?is)<think>(.*?)</think>`)
-	thoughtTagRegex  = regexp.MustCompile(`(?is)<thought>(.*?)</thought>`)
-	thinkingTagRegex = regexp.MustCompile(`(?is)\[Thinking\](.*?)\[/Thinking\]`)
-)
+// ChatStream initiates real-time token-by-token streaming via sashabaranov/go-openai,
+// invokes stream callbacks, handles <think> tags, and accumulates ToolCalls.
+func (c *Client) ChatStream(
+	ctx context.Context,
+	baseURL, apiKey string,
+	req ChatRequest,
+	cb StreamCallbacks,
+) (Message, string, error) {
+	client := c.getOpenAIClient(baseURL, apiKey)
 
-// ChatComplete calls completion for reliability in tool loops, extracts reasoning
-// and synthesizes content for the SSE layer.
-func (c *Client) ChatComplete(ctx context.Context, baseURL, apiKey string, req ChatRequest) (Message, string, error) {
-	resp, err := c.Chat(ctx, baseURL, apiKey, req)
+	oaiMsgs := make([]openai.ChatCompletionMessage, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		msg := openai.ChatCompletionMessage{
+			Role:       m.Role,
+			Content:    m.Content,
+			Name:       m.Name,
+			ToolCallID: m.ToolCallID,
+		}
+		if len(m.ToolCalls) > 0 {
+			tcs := make([]openai.ToolCall, 0, len(m.ToolCalls))
+			for _, tc := range m.ToolCalls {
+				tcs = append(tcs, openai.ToolCall{
+					ID:   tc.ID,
+					Type: openai.ToolType(tc.Type),
+					Function: openai.FunctionCall{
+						Name:      tc.Function.Name,
+						Arguments: tc.Function.Arguments,
+					},
+				})
+			}
+			msg.ToolCalls = tcs
+		}
+		oaiMsgs = append(oaiMsgs, msg)
+	}
+
+	var oaiTools []openai.Tool
+	if len(req.Tools) > 0 {
+		oaiTools = make([]openai.Tool, 0, len(req.Tools))
+		for _, t := range req.Tools {
+			oaiTools = append(oaiTools, openai.Tool{
+				Type: openai.ToolTypeFunction,
+				Function: &openai.FunctionDefinition{
+					Name:        t.Function.Name,
+					Description: t.Function.Description,
+					Parameters:  t.Function.Parameters,
+				},
+			})
+		}
+	}
+
+	oaiReq := openai.ChatCompletionRequest{
+		Model:    req.Model,
+		Messages: oaiMsgs,
+		Tools:    oaiTools,
+		Stream:   true,
+	}
+
+	stream, err := client.CreateChatCompletionStream(ctx, oaiReq)
 	if err != nil {
-		return Message{}, "", err
+		return Message{}, "", fmt.Errorf("create chat stream: %w", err)
 	}
-	if len(resp.Choices) == 0 {
-		return Message{}, "", fmt.Errorf("empty choices from model")
-	}
-	ch := resp.Choices[0]
-	msg := sanitizeChoiceMessage(ch.Message)
+	defer stream.Close()
 
-	return msg, ch.FinishReason, nil
-}
+	var finishReason string
+	var contentBuilder strings.Builder
+	var reasoningBuilder strings.Builder
+	toolCallsMap := make(map[int]*ToolCall)
 
-func sanitizeChoiceMessage(raw RawChoiceMessage) Message {
-	var contentStr string
-	var extractedReasoning string
+	inThinkTag := false
+	var pendingBuffer string
 
-	// Extract reasoning from various provider fields
-	if raw.ReasoningContent != "" {
-		extractedReasoning = strings.TrimSpace(raw.ReasoningContent)
-	} else if raw.Reasoning != "" {
-		extractedReasoning = strings.TrimSpace(raw.Reasoning)
-	} else if raw.Thought != "" {
-		extractedReasoning = strings.TrimSpace(raw.Thought)
-	} else if raw.Thoughts != "" {
-		extractedReasoning = strings.TrimSpace(raw.Thoughts)
-	}
+	for {
+		response, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return Message{}, "", fmt.Errorf("stream recv: %w", err)
+		}
 
-	// Parse Content (could be string or array of parts)
-	switch v := raw.Content.(type) {
-	case string:
-		contentStr = v
-	case []any:
-		var sb strings.Builder
-		for _, part := range v {
-			if m, ok := part.(map[string]any); ok {
-				if t, ok := m["type"].(string); ok {
-					if t == "text" {
-						if txt, ok := m["text"].(string); ok {
-							sb.WriteString(txt)
-						}
-					} else if t == "thinking" || t == "thought" {
-						if th, ok := m["thinking"].(string); ok && extractedReasoning == "" {
-							extractedReasoning = th
-						} else if th, ok := m["thought"].(string); ok && extractedReasoning == "" {
-							extractedReasoning = th
-						}
-					}
+		if len(response.Choices) == 0 {
+			continue
+		}
+
+		choice := response.Choices[0]
+		if choice.FinishReason != "" {
+			finishReason = string(choice.FinishReason)
+		}
+
+		// 1. Tool Call Delta accumulation
+		for _, tc := range choice.Delta.ToolCalls {
+			idx := 0
+			if tc.Index != nil {
+				idx = *tc.Index
+			}
+			existing, ok := toolCallsMap[idx]
+			if !ok {
+				toolCallsMap[idx] = &ToolCall{
+					ID:   tc.ID,
+					Type: string(tc.Type),
+					Function: FunctionCall{
+						Name:      tc.Function.Name,
+						Arguments: tc.Function.Arguments,
+					},
+				}
+			} else {
+				if tc.ID != "" {
+					existing.ID = tc.ID
+				}
+				if tc.Type != "" {
+					existing.Type = string(tc.Type)
+				}
+				if tc.Function.Name != "" {
+					existing.Function.Name += tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					existing.Function.Arguments += tc.Function.Arguments
 				}
 			}
 		}
-		contentStr = sb.String()
-	default:
-		if raw.Content != nil {
-			contentStr = fmt.Sprintf("%v", raw.Content)
+
+		// 2. Content & Reasoning streaming
+		textChunk := choice.Delta.Content
+		if textChunk == "" {
+			continue
+		}
+
+		pendingBuffer += textChunk
+
+		// Stream tokens processing <think> ... </think> or regular text
+		for len(pendingBuffer) > 0 {
+			if !inThinkTag {
+				lower := strings.ToLower(pendingBuffer)
+				startIdx := strings.Index(lower, "<think>")
+				if startIdx != -1 {
+					// Text before <think> is normal content
+					before := pendingBuffer[:startIdx]
+					if before != "" {
+						contentBuilder.WriteString(before)
+						if cb.OnContentChunk != nil {
+							cb.OnContentChunk(before)
+						}
+					}
+					pendingBuffer = pendingBuffer[startIdx+7:]
+					inThinkTag = true
+				} else if strings.Contains(lower, "<thin") || strings.Contains(lower, "<") {
+					// Might be part of <think> tag arriving across chunks, hold back prefix if at end
+					if strings.HasSuffix(lower, "<") || strings.HasSuffix(lower, "<t") ||
+						strings.HasSuffix(lower, "<th") || strings.HasSuffix(lower, "<thi") ||
+						strings.HasSuffix(lower, "<thin") || strings.HasSuffix(lower, "<think") {
+						break
+					}
+					// Normal text chunk
+					contentBuilder.WriteString(pendingBuffer)
+					if cb.OnContentChunk != nil {
+						cb.OnContentChunk(pendingBuffer)
+					}
+					pendingBuffer = ""
+				} else {
+					contentBuilder.WriteString(pendingBuffer)
+					if cb.OnContentChunk != nil {
+						cb.OnContentChunk(pendingBuffer)
+					}
+					pendingBuffer = ""
+				}
+			} else {
+				// We are inside <think> tag
+				lower := strings.ToLower(pendingBuffer)
+				endIdx := strings.Index(lower, "</think>")
+				if endIdx != -1 {
+					thinkText := pendingBuffer[:endIdx]
+					if thinkText != "" {
+						reasoningBuilder.WriteString(thinkText)
+						if cb.OnReasoningChunk != nil {
+							cb.OnReasoningChunk(thinkText)
+						}
+					}
+					pendingBuffer = pendingBuffer[endIdx+8:]
+					inThinkTag = false
+				} else if strings.Contains(lower, "</") || strings.Contains(lower, "<") {
+					if strings.HasSuffix(lower, "<") || strings.HasSuffix(lower, "</") ||
+						strings.HasSuffix(lower, "</t") || strings.HasSuffix(lower, "</th") ||
+						strings.HasSuffix(lower, "</thi") || strings.HasSuffix(lower, "</thin") ||
+						strings.HasSuffix(lower, "</think") {
+						break
+					}
+					reasoningBuilder.WriteString(pendingBuffer)
+					if cb.OnReasoningChunk != nil {
+						cb.OnReasoningChunk(pendingBuffer)
+					}
+					pendingBuffer = ""
+				} else {
+					reasoningBuilder.WriteString(pendingBuffer)
+					if cb.OnReasoningChunk != nil {
+						cb.OnReasoningChunk(pendingBuffer)
+					}
+					pendingBuffer = ""
+				}
+			}
 		}
 	}
 
-	// Extract tags like <think>...</think>, <thought>...</thought> from contentStr if reasoning is not yet set
-	if extractedReasoning == "" {
-		if m := thinkTagRegex.FindStringSubmatch(contentStr); len(m) > 1 {
-			extractedReasoning = strings.TrimSpace(m[1])
-			contentStr = strings.TrimSpace(thinkTagRegex.ReplaceAllString(contentStr, ""))
-		} else if m := thoughtTagRegex.FindStringSubmatch(contentStr); len(m) > 1 {
-			extractedReasoning = strings.TrimSpace(m[1])
-			contentStr = strings.TrimSpace(thoughtTagRegex.ReplaceAllString(contentStr, ""))
-		} else if m := thinkingTagRegex.FindStringSubmatch(contentStr); len(m) > 1 {
-			extractedReasoning = strings.TrimSpace(m[1])
-			contentStr = strings.TrimSpace(thinkingTagRegex.ReplaceAllString(contentStr, ""))
-		} else {
-			// Handle unclosed <think> tag
-			lower := strings.ToLower(contentStr)
-			if idx := strings.Index(lower, "<think>"); idx != -1 {
-				extractedReasoning = strings.TrimSpace(contentStr[idx+7:])
-				contentStr = strings.TrimSpace(contentStr[:idx])
+	// Flush any remaining pendingBuffer
+	if len(pendingBuffer) > 0 {
+		if inThinkTag {
+			reasoningBuilder.WriteString(pendingBuffer)
+			if cb.OnReasoningChunk != nil {
+				cb.OnReasoningChunk(pendingBuffer)
 			}
+		} else {
+			contentBuilder.WriteString(pendingBuffer)
+			if cb.OnContentChunk != nil {
+				cb.OnContentChunk(pendingBuffer)
+			}
+		}
+	}
+
+	// Assemble tool calls in index order
+	var finalToolCalls []ToolCall
+	if len(toolCallsMap) > 0 {
+		keys := make([]int, 0, len(toolCallsMap))
+		for k := range toolCallsMap {
+			keys = append(keys, k)
+		}
+		sort.Ints(keys)
+		for _, k := range keys {
+			finalToolCalls = append(finalToolCalls, *toolCallsMap[k])
 		}
 	}
 
 	return Message{
-		Role:             raw.Role,
-		Content:          contentStr,
-		ReasoningContent: extractedReasoning,
-		Name:             raw.Name,
-		ToolCallID:       raw.ToolCallID,
-		ToolCalls:        raw.ToolCalls,
-	}
-}
-
-func (c *Client) doJSON(ctx context.Context, baseURL, apiKey string, reqBody any, out any) error {
-	endpoint := strings.TrimRight(baseURL, "/") + "/chat/completions"
-	raw, err := json.Marshal(reqBody)
-	if err != nil {
-		return err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("llm status %d: %s", resp.StatusCode, truncate(string(body), 800))
-	}
-	return json.Unmarshal(body, out)
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
+		Role:             "assistant",
+		Content:          strings.TrimSpace(contentBuilder.String()),
+		ReasoningContent: strings.TrimSpace(reasoningBuilder.String()),
+		ToolCalls:        finalToolCalls,
+	}, finishReason, nil
 }
 
 func NewHTTPClientWithTimeout(d time.Duration) *http.Client {

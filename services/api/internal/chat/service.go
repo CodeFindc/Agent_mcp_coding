@@ -178,18 +178,21 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 	toolCallsUsed := 0
 	for round := 0; round < s.cfg.ChatMaxRounds; round++ {
 		emit(Event{Type: "model_round", Content: fmt.Sprintf("%d", round+1)})
-		msg, finish, err := s.llm.ChatComplete(ctx, provider.BaseURL, apiKey, llm.ChatRequest{
+		msg, finish, err := s.llm.ChatStream(ctx, provider.BaseURL, apiKey, llm.ChatRequest{
 			Model:    provider.DefaultModel,
 			Messages: messages,
 			Tools:    llmTools,
+		}, llm.StreamCallbacks{
+			OnReasoningChunk: func(token string) {
+				emit(Event{Type: "assistant_reasoning", Content: token, ThreadID: thread.ID})
+			},
+			OnContentChunk: func(token string) {
+				emit(Event{Type: "assistant_delta", Content: token, ThreadID: thread.ID})
+			},
 		})
 		if err != nil {
 			emit(Event{Type: "error", Error: err.Error()})
 			return err
-		}
-
-		if msg.ReasoningContent != "" {
-			emit(Event{Type: "assistant_reasoning", Content: msg.ReasoningContent, ThreadID: thread.ID})
 		}
 
 		if len(msg.ToolCalls) > 0 {
@@ -202,9 +205,6 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 				ToolCallsJSON:    string(toolJSON),
 			}
 			_ = s.db.Create(&assistant).Error
-			if msg.Content != "" {
-				emit(Event{Type: "assistant_delta", Content: msg.Content, ThreadID: thread.ID})
-			}
 			messages = append(messages, msg)
 
 			for _, tc := range msg.ToolCalls {
@@ -254,7 +254,6 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 		if err := s.db.Create(&assistant).Error; err != nil {
 			return err
 		}
-		emit(Event{Type: "assistant_delta", Content: msg.Content, ThreadID: thread.ID, MessageID: assistant.ID})
 		emit(Event{Type: "done", ThreadID: thread.ID, MessageID: assistant.ID, Content: finish})
 		_ = s.db.Model(thread).Update("updated_at", time.Now())
 		return nil
