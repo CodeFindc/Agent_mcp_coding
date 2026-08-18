@@ -115,6 +115,7 @@ func (s *Server) handleAuthConfig(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"devAuthEnabled": s.cfg.DevAuthEnabled,
 		"oidcEnabled":    s.auth.OIDCEnabled(),
+		"defaultModel":   s.cfg.DefaultOpenAIModel,
 	})
 }
 

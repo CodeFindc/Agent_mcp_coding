@@ -1,5 +1,11 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
 
+export type AuthConfig = {
+  devAuthEnabled: boolean;
+  oidcEnabled: boolean;
+  defaultModel?: string;
+};
+
 export type User = {
   id: number;
   email: string;
@@ -85,7 +91,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   base: API_BASE,
   authConfig: () =>
-    request<{ devAuthEnabled: boolean; oidcEnabled: boolean }>("/api/v1/auth/config"),
+    request<AuthConfig>("/api/v1/auth/config"),
   me: () => request<User>("/api/v1/auth/me"),
   devLogin: (email: string, name: string) =>
     request<User>("/api/v1/auth/dev-login", {

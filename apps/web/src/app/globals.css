@@ -1,16 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0b1220;
-  --panel: #121a2b;
-  --panel-2: #182238;
-  --border: #243049;
-  --text: #e8eefc;
-  --muted: #93a0b8;
-  --accent: #5b8cff;
+  --bg: #0b0b0f;
+  --surface: #131313;
+  --panel: #1b1b1c;
+  --panel-2: #2a2a2a;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text: #e5e2e1;
+  --muted: #c1c6d7;
+  --accent: #adc6ff;
+  --accent-strong: #4b8eff;
   --accent-2: #3dd6c6;
   --danger: #ff6b7a;
+  --error: #ffb4ab;
   --ok: #3ecf8e;
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 * {
@@ -22,20 +31,15 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #1a2a4a 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #12353a 0%, transparent 50%),
-    var(--bg);
   color: var(--text);
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(1000px 620px at 12% -8%, rgba(75, 142, 255, 0.2), transparent 60%),
+    radial-gradient(820px 520px at 88% -4%, rgba(61, 214, 198, 0.14), transparent 55%),
+    radial-gradient(1000px 720px at 50% 118%, rgba(173, 198, 255, 0.08), transparent 60%),
+    radial-gradient(600px 500px at 96% 70%, rgba(151, 216, 255, 0.08), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 a {
@@ -49,58 +53,123 @@ textarea {
   font: inherit;
 }
 
+/* ---- macOS frosted-glass window ---- */
+.mac-window {
+  position: relative;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(44px) saturate(150%);
+  backdrop-filter: blur(44px) saturate(150%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.glass-pane {
+  background: rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+}
+
+/* ---- macOS traffic lights ---- */
+.t-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.t-close {
+  background: #ff5f56;
+}
+.t-min {
+  background: #ffbd2e;
+}
+.t-max {
+  background: #27c93f;
+}
+
+/* ---- surfaces & cards ---- */
 .card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent), var(--panel);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
 }
 
+/* ---- buttons ---- */
 .btn {
-  border: 1px solid var(--border);
-  background: var(--panel-2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
   border-radius: 10px;
   padding: 0.55rem 0.9rem;
   cursor: pointer;
-  transition: 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  font-size: 0.875rem;
 }
 
-.btn:hover {
-  border-color: #3a4d73;
+.btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .btn:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, #6b98ff, #4c7ff0);
-  border-color: #6b98ff;
-  color: white;
+  background: rgba(75, 142, 255, 0.18);
+  border-color: rgba(173, 198, 255, 0.28);
+  color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(75, 142, 255, 0.28);
+  border-color: rgba(173, 198, 255, 0.42);
 }
 
 .btn-danger {
   background: rgba(255, 107, 122, 0.12);
-  border-color: rgba(255, 107, 122, 0.45);
-  color: #ffb4bc;
+  border-color: rgba(255, 107, 122, 0.4);
+  color: var(--error);
 }
 
+.btn-danger:hover:not(:disabled) {
+  background: rgba(255, 107, 122, 0.2);
+}
+
+/* ---- inputs ---- */
 .input {
   width: 100%;
-  border: 1px solid var(--border);
-  background: #0e1626;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text);
   border-radius: 10px;
   padding: 0.65rem 0.8rem;
   outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: rgba(193, 198, 215, 0.6);
 }
 
 .input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(173, 198, 255, 0.14);
 }
 
+/* ---- misc ---- */
 .muted {
   color: var(--muted);
 }
@@ -110,10 +179,12 @@ textarea {
   align-items: center;
   gap: 0.35rem;
   border-radius: 999px;
-  padding: 0.2rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   font-size: 12px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .badge.ok {
@@ -123,7 +194,7 @@ textarea {
 
 .badge.err {
   color: var(--danger);
-  border-color: rgba(255, 107, 122, 0.35);
+  border-color: rgba(255, 107, 122, 0.4);
 }
 
 .badge.run {
@@ -131,8 +202,100 @@ textarea {
   border-color: rgba(61, 214, 198, 0.35);
 }
 
+.badge.primary {
+  color: var(--accent);
+  border-color: rgba(173, 198, 255, 0.35);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  color: var(--muted);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  cursor: default;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: rgba(173, 198, 255, 0.15);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  user-select: none;
+}
+
+/* ---- chat ---- */
 .prose-chat {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.55;
+}
+
+.tool-result {
+  font-family: var(--font-mono);
+}
+
+/* ---- thin scrollbars ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

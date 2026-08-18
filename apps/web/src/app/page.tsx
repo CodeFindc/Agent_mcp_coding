@@ -1,23 +1,22 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChatInput } from "@/components/ChatInput";
+import { MessageBubble, UiMsg } from "@/components/MessageBubble";
+import { RightPanel } from "@/components/RightPanel";
+import { Sidebar } from "@/components/Sidebar";
+import { TopBar } from "@/components/TopBar";
 import {
   api,
-  ChatEvent,
   ChatMessage,
   ChatThread,
   Project,
   RuntimeStatus,
   RuntimeSummary,
-  User,
   sendChat,
+  User,
 } from "@/lib/api";
-
-type UiMsg =
-  | { kind: "user" | "assistant"; content: string }
-  | { kind: "tool"; tool: string; args?: string; result?: string };
 
 export default function HomePage() {
   const router = useRouter();
@@ -32,8 +31,8 @@ export default function HomePage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [newProjectName, setNewProjectName] = useState("");
   const [statusText, setStatusText] = useState("");
+  const [modelLabel, setModelLabel] = useState("模型");
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) || null,
@@ -78,6 +77,12 @@ export default function HomePage() {
       } catch {
         router.replace("/login");
       }
+      try {
+        const cfg = await api.authConfig();
+        if (cfg.defaultModel) setModelLabel(cfg.defaultModel);
+      } catch {
+        /* model label is cosmetic */
+      }
     })();
   }, [loadProjects, refreshRuntimes, router]);
 
@@ -118,16 +123,30 @@ export default function HomePage() {
     })();
   }, [threadId]);
 
-  async function createProject(e: FormEvent) {
-    e.preventDefault();
-    if (!newProjectName.trim()) return;
+  async function createProject(name: string) {
     setBusy(true);
     setError("");
     try {
-      const p = await api.createProject(newProjectName.trim());
-      setNewProjectName("");
+      const p = await api.createProject(name);
       await loadProjects();
       setSelectedProjectId(p.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function newThread() {
+    if (!selectedProjectId) return;
+    setBusy(true);
+    setError("");
+    try {
+      const t = await api.createThread(selectedProjectId);
+      const list = await api.listThreads(selectedProjectId);
+      setThreads(list);
+      setThreadId(t.id);
+      setMessages([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -170,8 +189,7 @@ export default function HomePage() {
     }
   }
 
-  async function onSend(e: FormEvent) {
-    e.preventDefault();
+  async function onSend() {
     if (!selectedProjectId || !input.trim() || busy) return;
     const content = input.trim();
     setInput("");
@@ -188,7 +206,7 @@ export default function HomePage() {
           threadId: threadId || undefined,
           content,
         },
-        (ev: ChatEvent) => {
+        (ev) => {
           if (ev.type === "thread" && ev.threadId) {
             setThreadId(ev.threadId);
             api.listThreads(selectedProjectId).then(setThreads).catch(() => undefined);
@@ -250,218 +268,104 @@ export default function HomePage() {
   }
 
   if (!user) {
-    return <main className="min-h-screen grid place-items-center muted">加载中…</main>;
-  }
-
-  return (
-    <div className="min-h-screen grid grid-rows-[auto_1fr]">
-      <header className="border-b border-[var(--border)] bg-black/20 backdrop-blur px-5 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500" />
-          <div>
-            <div className="font-semibold tracking-tight">Coding Agent</div>
-            <div className="text-xs muted">一用户一容器 · 多项目并行</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <RuntimeBadge runtime={userRuntimeStatus} />
-          <span className="muted">{user.name || user.email}</span>
-          {user.role === "admin" ? (
-            <Link className="btn" href="/admin">
-              管理
-            </Link>
-          ) : null}
-          <button className="btn" onClick={logout}>
-            退出
-          </button>
-        </div>
-      </header>
-
-      <div className="grid lg:grid-cols-[280px_220px_1fr] min-h-0">
-        <aside className="border-r border-[var(--border)] p-4 space-y-4 overflow-auto">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-medium">项目</h2>
-            <div className="flex gap-1">
-              <button className="btn text-xs" disabled={busy} onClick={startSelected}>
-                启动工作区
-              </button>
-              <button className="btn text-xs" disabled={busy} onClick={stopSelected}>
-                停止
-              </button>
-            </div>
-          </div>
-          <form onSubmit={createProject} className="flex gap-2">
-            <input
-              className="input"
-              placeholder="新项目名"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-            />
-            <button className="btn btn-primary" type="submit" disabled={busy}>
-              建
-            </button>
-          </form>
-          <div className="space-y-2">
-            {projects.map((p) => {
-              const active = p.id === selectedProjectId;
-              return (
-                <button
-                  key={p.id}
-                  className={`w-full text-left card px-3 py-3 transition ${active ? "ring-1 ring-sky-400/50" : ""}`}
-                  onClick={() => setSelectedProjectId(p.id)}
-                >
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs muted mt-1">{p.slug}</div>
-                  <div className="mt-2">
-                    <ProjectRuntimeBadge runtime={userRuntimeStatus || undefined} selected={active} />
-                  </div>
-                </button>
-              );
-            })}
-            {!projects.length ? <p className="muted text-sm">还没有项目，先创建一个。</p> : null}
-          </div>
-          {selectedProject ? (
-            <div className="text-xs muted break-all space-y-1">
-              <div>路径：{selectedProject.diskPath}</div>
-              {userRuntimeStatus?.containerName ? <div>容器：{userRuntimeStatus.containerName}</div> : null}
-            </div>
-          ) : null}
-        </aside>
-
-        <aside className="border-r border-[var(--border)] p-4 overflow-auto">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-medium">会话</h2>
-            <button
-              className="btn text-xs"
-              disabled={!selectedProjectId || busy}
-              onClick={async () => {
-                if (!selectedProjectId) return;
-                const t = await api.createThread(selectedProjectId);
-                const list = await api.listThreads(selectedProjectId);
-                setThreads(list);
-                setThreadId(t.id);
-                setMessages([]);
-              }}
-            >
-              新建
-            </button>
-          </div>
-          <div className="space-y-2">
-            {threads.map((t) => (
-              <button
-                key={t.id}
-                className={`w-full text-left rounded-xl px-3 py-2 border border-[var(--border)] ${
-                  t.id === threadId ? "bg-[var(--panel-2)]" : "bg-transparent"
-                }`}
-                onClick={() => setThreadId(t.id)}
-              >
-                <div className="text-sm truncate">{t.title}</div>
-              </button>
-            ))}
-            {!threads.length ? <p className="muted text-sm">发送第一条消息将自动创建会话。</p> : null}
-          </div>
-        </aside>
-
-        <section className="min-h-0 grid grid-rows-[1fr_auto]">
-          <div className="overflow-auto p-5 space-y-3">
-            {error ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
-                {error}
-              </div>
-            ) : null}
-            {statusText ? <div className="text-xs muted">{statusText}</div> : null}
-            {messages.map((m, idx) => (
-              <MessageBubble key={idx} msg={m} />
-            ))}
-            {!messages.length ? (
-              <div className="card p-6 muted text-sm leading-7">
-                每位用户一个 coding-tools 容器；多个项目共享该容器，在进程内按项目 slug 隔离。
-                <br />
-                对话会 EnsureRunning 用户容器，并通过 MCP _meta 传入当前项目 slug。
-                <br />
-                新建项目无需再起容器，目录出现在 /projects/&#123;slug&#125; 即可懒加载 Runtime。
-              </div>
-            ) : null}
-          </div>
-          <form onSubmit={onSend} className="border-t border-[var(--border)] p-4 flex gap-3">
-            <textarea
-              className="input min-h-[56px] max-h-40 resize-y"
-              placeholder={selectedProject ? `在「${selectedProject.name}」中提问…` : "请先选择项目"}
-              value={input}
-              disabled={!selectedProjectId || busy}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void onSend(e);
-                }
-              }}
-            />
-            <button className="btn btn-primary self-end" disabled={!selectedProjectId || busy || !input.trim()}>
-              {busy ? "…" : "发送"}
-            </button>
-          </form>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-function RuntimeBadge({ runtime }: { runtime: RuntimeStatus | null }) {
-  if (!runtime) return <span className="badge">工作区 -</span>;
-  if (runtime.status === "running" && runtime.mcpReady) return <span className="badge ok">工作区 MCP ready</span>;
-  if (runtime.status === "running") return <span className="badge run">工作区 running</span>;
-  if (runtime.status === "error") return <span className="badge err">工作区 error</span>;
-  if (runtime.status === "starting") return <span className="badge run">工作区 starting</span>;
-  return <span className="badge">工作区 stopped</span>;
-}
-
-function ProjectRuntimeBadge({ runtime, selected }: { runtime?: RuntimeStatus; selected?: boolean }) {
-  if (!runtime) return <span className="badge">工作区 stopped</span>;
-  if (runtime.status === "running" && runtime.mcpReady) {
-    return <span className="badge ok">{selected ? "当前 · ready" : "ready"}</span>;
-  }
-  if (runtime.status === "running") return <span className="badge run">running</span>;
-  if (runtime.status === "error") return <span className="badge err">error</span>;
-  if (runtime.status === "starting") return <span className="badge run">starting</span>;
-  return <span className="badge">stopped</span>;
-}
-
-function MessageBubble({ msg }: { msg: UiMsg }) {
-  if (msg.kind === "tool") {
     return (
-      <div className="card px-4 py-3 text-sm">
-        <div className="font-medium text-cyan-300">🛠 {msg.tool}</div>
-        {msg.args ? <pre className="mt-2 text-xs muted overflow-auto">{msg.args}</pre> : null}
-        {msg.result !== undefined ? (
-          <pre className="mt-2 text-xs overflow-auto max-h-64 prose-chat">{msg.result}</pre>
-        ) : (
-          <div className="muted text-xs mt-2">执行中…</div>
-        )}
-      </div>
+      <main className="min-h-screen flex items-center justify-center">
+        <span className="muted text-sm">加载中…</span>
+      </main>
     );
   }
-  const mine = msg.kind === "user";
+
   return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${
-          mine ? "bg-sky-600/30 border border-sky-400/20" : "card"
-        }`}
-      >
-        <div className="text-[11px] muted mb-1">{mine ? "你" : "助手"}</div>
-        <div className="prose-chat">{msg.content}</div>
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-8">
+      <div className="mac-window w-full h-[calc(100dvh-2rem)] max-w-[1600px] max-h-[900px] flex">
+        <Sidebar
+          user={user}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onSelectProject={setSelectedProjectId}
+          onCreateProject={createProject}
+          threads={threads}
+          threadId={threadId}
+          onSelectThread={setThreadId}
+          onCreateThread={newThread}
+          runtime={userRuntimeStatus}
+          busy={busy}
+          onLogout={logout}
+          isAdmin={user.role === "admin"}
+        />
+
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar
+            projectName={selectedProject?.name}
+            projectSlug={selectedProject?.slug}
+            runtime={userRuntimeStatus}
+            busy={busy}
+            onStart={startSelected}
+            onStop={stopSelected}
+            isAdmin={user.role === "admin"}
+            user={user}
+          />
+
+          <div className="flex-1 flex overflow-hidden min-h-0">
+            <main className="flex-1 flex flex-col min-w-0">
+              <div className="flex-1 overflow-y-auto p-5 space-y-3 min-h-0">
+                {error ? (
+                  <div className="rounded-xl border border-[rgba(255,107,122,0.35)] bg-[rgba(255,107,122,0.1)] px-3 py-2 text-sm text-[var(--error)]">
+                    {error}
+                  </div>
+                ) : null}
+                {messages.map((m, idx) => (
+                  <MessageBubble key={idx} msg={m} />
+                ))}
+                {!messages.length ? (
+                  <div className="glass-pane p-6 muted text-sm leading-7">
+                    在左侧选择或创建项目，即可开始对话。
+                    <br />
+                    每位用户一个 coding-tools 容器；多个项目共享该容器，在进程内按项目 slug
+                    隔离。
+                    <br />
+                    对话会自动 EnsureRunning 用户容器，并通过 MCP _meta 传入当前项目 slug。
+                  </div>
+                ) : null}
+              </div>
+              {statusText ? (
+                <div className="px-5 pb-1 text-xs muted flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[14px] animate-pulse">
+                    keep
+                  </span>
+                  {statusText}
+                </div>
+              ) : null}
+              <ChatInput
+                value={input}
+                onChange={setInput}
+                onSend={onSend}
+                disabled={!selectedProjectId}
+                busy={busy}
+                placeholder={
+                  selectedProject ? `在「${selectedProject.name}」中提问…` : "请先选择项目"
+                }
+                modelLabel={modelLabel}
+              />
+            </main>
+
+            <RightPanel
+              project={selectedProject}
+              runtime={userRuntimeStatus}
+              modelLabel={modelLabel}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function dbToUi(list: ChatMessage[]): UiMsg[] {
+function dbToUi(msgs: ChatMessage[]): UiMsg[] {
   const out: UiMsg[] = [];
-  for (const m of list) {
-    if (m.role === "user") out.push({ kind: "user", content: m.content });
-    else if (m.role === "assistant") {
-      if (m.content) out.push({ kind: "assistant", content: m.content });
+  for (const m of msgs) {
+    if (m.role === "user" || m.role === "assistant") {
+      out.push({ kind: m.role, content: m.content });
     } else if (m.role === "tool") {
       out.push({ kind: "tool", tool: m.name || "tool", result: m.content });
     }
