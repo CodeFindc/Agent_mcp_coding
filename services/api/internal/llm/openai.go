@@ -201,7 +201,15 @@ func (c *Client) ChatStream(
 			}
 		}
 
-		// 2. Content & Reasoning streaming
+		// 2. Reasoning Content streaming (DeepSeek Reasoner / DeepSeek-R1 / OpenAI reasoning)
+		if choice.Delta.ReasoningContent != "" {
+			reasoningBuilder.WriteString(choice.Delta.ReasoningContent)
+			if cb.OnReasoningChunk != nil {
+				cb.OnReasoningChunk(choice.Delta.ReasoningContent)
+			}
+		}
+
+		// 3. Content & <think> tag streaming
 		textChunk := choice.Delta.Content
 		if textChunk == "" {
 			continue

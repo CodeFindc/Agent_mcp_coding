@@ -279,6 +279,10 @@ export default function HomePage() {
             setThreadId(ev.threadId);
             api.listThreads(selectedProjectId).then(setThreads).catch(() => undefined);
           }
+          if (ev.type === "model_round") {
+            assistantBuf = "";
+            reasoningBuf = "";
+          }
           if (ev.type === "assistant_reasoning" && ev.content) {
             reasoningBuf += ev.content;
             setStatusText("正在深度思考…");
@@ -318,6 +322,7 @@ export default function HomePage() {
                 next.push({
                   kind: "assistant",
                   content: assistantBuf,
+                  reasoning: reasoningBuf || undefined,
                   isThinking: false,
                 });
               }
@@ -357,6 +362,7 @@ export default function HomePage() {
               return next;
             });
             assistantBuf = "";
+            reasoningBuf = "";
           }
           if (ev.type === "error") {
             setError(ev.error || "unknown error");
