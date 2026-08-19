@@ -136,12 +136,17 @@ function getToolMeta(tool: string) {
     case "bash":
     case "exec":
     case "run_command":
+    case "exec_command":
       return {
         icon: "terminal",
         bgColor: "bg-emerald-500/10",
         textColor: "text-emerald-400",
         summary: (args: Record<string, unknown>) =>
-          typeof args.command === "string" ? args.command : "",
+          typeof args.command === "string"
+            ? args.command
+            : typeof args.cmd === "string"
+              ? args.cmd
+              : "",
       };
     case "read_file":
       return {
@@ -153,14 +158,21 @@ function getToolMeta(tool: string) {
       };
     case "edit_file":
     case "write_file":
+    case "apply_patch":
       return {
         icon: "edit_document",
         bgColor: "bg-cyan-500/10",
         textColor: "text-cyan-400",
         summary: (args: Record<string, unknown>) =>
-          typeof args.path === "string" ? args.path : "",
+          typeof args.path === "string"
+            ? args.path
+            : typeof args.patch === "string"
+              ? "patch"
+              : "",
       };
     case "list_directory":
+    case "list_dir":
+    case "list_files":
     case "glob_find":
       return {
         icon: "folder_open",
@@ -171,15 +183,58 @@ function getToolMeta(tool: string) {
             ? args.path
             : typeof args.pattern === "string"
               ? args.pattern
-              : "",
+              : typeof args.glob === "string"
+                ? args.glob
+                : "",
       };
     case "grep_search":
+    case "search_text":
       return {
         icon: "search",
         bgColor: "bg-purple-500/10",
         textColor: "text-purple-400",
+        summary: (args: Record<string, unknown>) => {
+          const q =
+            typeof args.query === "string"
+              ? args.query
+              : typeof args.pattern === "string"
+                ? args.pattern
+                : typeof args.regex === "string"
+                  ? args.regex
+                  : "";
+          return q ? `"${q}"` : "";
+        },
+      };
+    case "git_status":
+    case "git_diff":
+    case "git_log":
+    case "git_show":
+    case "git_blame":
+      return {
+        icon: "commit",
+        bgColor: "bg-orange-500/10",
+        textColor: "text-orange-400",
         summary: (args: Record<string, unknown>) =>
-          typeof args.query === "string" ? `"${args.query}"` : "",
+          typeof args.path === "string"
+            ? args.path
+            : typeof args.ref === "string"
+              ? args.ref
+              : "",
+      };
+    case "list_skills":
+      return {
+        icon: "auto_awesome_motion",
+        bgColor: "bg-violet-500/10",
+        textColor: "text-violet-300",
+        summary: () => "catalog",
+      };
+    case "load_skill":
+      return {
+        icon: "auto_awesome",
+        bgColor: "bg-fuchsia-500/10",
+        textColor: "text-fuchsia-300",
+        summary: (args: Record<string, unknown>) =>
+          typeof args.name === "string" ? args.name : "",
       };
     default:
       return {
@@ -196,7 +251,11 @@ function renderToolParameters(
   args: Record<string, unknown>,
   rawArgs?: string,
 ) {
-  if (tool === "bash" && typeof args.command === "string") {
+  if (
+    (tool === "bash" || tool === "exec_command" || tool === "exec" || tool === "run_command") &&
+    (typeof args.command === "string" || typeof args.cmd === "string")
+  ) {
+    const cmd = typeof args.command === "string" ? args.command : String(args.cmd);
     return (
       <div>
         <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1 px-0.5">
@@ -204,13 +263,28 @@ function renderToolParameters(
         </div>
         <div className="flex items-center gap-2 bg-[#05060a] px-3 py-2 rounded-lg border border-slate-800/80 font-mono text-emerald-400 text-xs">
           <span className="text-slate-600 select-none">$</span>
-          <span className="text-slate-200">{args.command}</span>
+          <span className="text-slate-200">{cmd}</span>
         </div>
       </div>
     );
   }
 
-  if (tool === "edit_file" && typeof args.path === "string") {
+  if (tool === "load_skill" && typeof args.name === "string") {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-slate-500">加载技能:</span>
+        <span className="font-mono text-fuchsia-300 font-medium">{args.name}</span>
+      </div>
+    );
+  }
+
+  if (tool === "list_skills") {
+    return (
+      <div className="text-xs text-slate-400">列出可用 SKILL.md 技能包目录</div>
+    );
+  }
+
+  if ((tool === "edit_file" || tool === "apply_patch") && typeof args.path === "string") {
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs">

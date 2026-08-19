@@ -17,6 +17,7 @@ import {
   RuntimeStatus,
   RuntimeSummary,
   sendChat,
+  SkillMeta,
   User,
 } from "@/lib/api";
 
@@ -69,6 +70,7 @@ export default function HomePage() {
     path: string;
     mode: "preview" | "diff";
   } | null>(null);
+  const [skills, setSkills] = useState<SkillMeta[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -153,6 +155,25 @@ export default function HomePage() {
       }
     })();
   }, [selectedProjectId, refreshSelectedRuntime, refreshRuntimes]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setSkills([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .listProjectSkills(selectedProjectId)
+      .then((res) => {
+        if (!cancelled) setSkills(res.skills || []);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProjectId]);
 
   useEffect(() => {
     if (!threadId) {
@@ -518,10 +539,11 @@ export default function HomePage() {
               busy={busy}
               placeholder={
                 selectedProject
-                  ? `在「${selectedProject.name}」中向 Coding Agent 提问…`
+                  ? `在「${selectedProject.name}」中提问，输入 / 选择 skill…`
                   : "请先在左侧选择或创建项目"
               }
               modelLabel={modelLabel}
+              skills={skills}
             />
           </main>
 

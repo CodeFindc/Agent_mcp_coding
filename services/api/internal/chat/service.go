@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,8 +16,12 @@ import (
 	"github.com/coding-agent-platform/api/internal/models"
 	"github.com/coding-agent-platform/api/internal/projects"
 	"github.com/coding-agent-platform/api/internal/runtime"
+	"github.com/coding-agent-platform/api/internal/skills"
 	"gorm.io/gorm"
 )
+
+// Matches /skill or /group/skill at start or after whitespace.
+var slashSkillRE = regexp.MustCompile(`(?:^|[\s])/(?:@)?([a-zA-Z0-9][a-zA-Z0-9._-]*(?:/[a-zA-Z0-9][a-zA-Z0-9._-]*)?)`)
 
 var ErrNotFound = errors.New("not found")
 
@@ -27,6 +32,7 @@ type Service struct {
 	runtime  *runtime.Service
 	mcp      *mcp.Client
 	llm      *llm.Client
+	skills   *skills.Service
 }
 
 func NewService(db *gorm.DB, cfg config.Config, projectsSvc *projects.Service, runtimeSvc *runtime.Service) *Service {
@@ -37,18 +43,19 @@ func NewService(db *gorm.DB, cfg config.Config, projectsSvc *projects.Service, r
 		runtime:  runtimeSvc,
 		mcp:      mcp.NewClient(cfg.MCPRequestTimeout),
 		llm:      llm.NewClient(),
+		skills:   skills.NewService(0),
 	}
 }
 
 type Event struct {
-	Type    string `json:"type"`
-	Content string `json:"content,omitempty"`
-	Tool    string `json:"tool,omitempty"`
-	Args    string `json:"args,omitempty"`
-	Result  string `json:"result,omitempty"`
-	Error   string `json:"error,omitempty"`
-	ThreadID uint  `json:"threadId,omitempty"`
-	MessageID uint `json:"messageId,omitempty"`
+	Type      string `json:"type"`
+	Content   string `json:"content,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Args      string `json:"args,omitempty"`
+	Result    string `json:"result,omitempty"`
+	Error     string `json:"error,omitempty"`
+	ThreadID  uint   `json:"threadId,omitempty"`
+	MessageID uint   `json:"messageId,omitempty"`
 }
 
 func (s *Service) ListThreads(userID, projectID uint) ([]models.ChatThread, error) {
@@ -94,6 +101,40 @@ func (s *Service) ListMessages(userID, threadID uint) ([]models.ChatMessage, err
 	return items, err
 }
 
+// ListSkills returns the skill catalog for a project (HTTP / UI).
+func (s *Service) ListSkills(userID, projectID uint) ([]skills.Meta, error) {
+	opts, err := s.skillOpts(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return s.skills.List(opts)
+}
+
+// GetSkill loads one skill body for a project (HTTP / UI).
+func (s *Service) GetSkill(userID, projectID uint, name string) (*skills.Skill, error) {
+	opts, err := s.skillOpts(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return s.skills.Load(name, opts)
+}
+
+func (s *Service) skillOpts(userID, projectID uint) (skills.ListOptions, error) {
+	project, err := s.projects.Get(userID, projectID)
+	if err != nil {
+		return skills.ListOptions{}, err
+	}
+	root, err := s.projects.AbsolutePath(project)
+	if err != nil {
+		return skills.ListOptions{}, err
+	}
+	return skills.ListOptions{
+		ProjectRoot: root,
+		UserID:      userID,
+		DataRoot:    s.cfg.DataRoot,
+	}, nil
+}
+
 type SendInput struct {
 	ThreadID  uint   `json:"threadId"`
 	ProjectID uint   `json:"projectId"`
@@ -130,50 +171,58 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 		return err
 	}
 
+	// Persist the raw user text; slash skill bodies are injected only into the model context.
 	userMsg := models.ChatMessage{ThreadID: thread.ID, Role: "user", Content: content}
 	if err := s.db.Create(&userMsg).Error; err != nil {
 		return err
 	}
 	emit(Event{Type: "user_message", MessageID: userMsg.ID, Content: content, ThreadID: thread.ID})
 
-		// One container per user; project slug selects the in-process Runtime.
-		_, endpoint, token, err := s.runtime.EnsureRunning(userID)
-		if err != nil {
-			emit(Event{Type: "error", Error: err.Error()})
-			return err
-		}
+	// One container per user; project slug selects the in-process Runtime.
+	_, endpoint, token, err := s.runtime.EnsureRunning(userID)
+	if err != nil {
+		emit(Event{Type: "error", Error: err.Error()})
+		return err
+	}
 
-		tools, err := s.mcp.ListTools(ctx, endpoint, token, project.Slug)
-		if err != nil {
-			emit(Event{Type: "error", Error: "mcp tools/list: " + err.Error()})
-			return err
-		}
-		llmTools := mcpToolsToLLM(tools)
+	tools, err := s.mcp.ListTools(ctx, endpoint, token, project.Slug)
+	if err != nil {
+		emit(Event{Type: "error", Error: "mcp tools/list: " + err.Error()})
+		return err
+	}
+	llmTools := mcpToolsToLLM(tools)
+	llmTools = append(llmTools, skillToolsToLLM()...)
 
-		provider, apiKey, err := s.activeProvider()
-		if err != nil {
-			emit(Event{Type: "error", Error: err.Error()})
-			return err
-		}
+	skillOpts, err := s.skillOpts(userID, project.ID)
+	if err != nil {
+		emit(Event{Type: "error", Error: "skills: " + err.Error()})
+		return err
+	}
+	skillCatalog, _ := s.skills.List(skillOpts)
 
-		history, err := s.ListMessages(userID, thread.ID)
-		if err != nil {
-			return err
-		}
-		messages := []llm.Message{{
-			Role: "system",
-			Content: fmt.Sprintf(
-				"You are an expert AI Coding Agent equipped with rich MCP tools inside an isolated project workspace.\n"+
-					"Current Project: %s (slug: %s)\n"+
-					"GUIDELINES:\n"+
-					"1. Always think step-by-step before executing actions.\n"+
-					"2. PROACTIVELY invoke available MCP tools (such as list_directory, read_file, edit_file, bash, grep_search) to inspect workspace files, investigate codebases, and run commands.\n"+
-					"3. Keep edits precise and accurate. Summarize your actions clearly after tool execution.",
-				project.Name,
-				project.Slug,
-			),
-		}}
-	messages = append(messages, dbMessagesToLLM(history)...)
+	// Expand leading /skill-name mentions into loaded skill bodies for this turn only.
+	modelUserContent := expandSlashSkills(content, s.skills, skillOpts)
+
+	provider, apiKey, err := s.activeProvider()
+	if err != nil {
+		emit(Event{Type: "error", Error: err.Error()})
+		return err
+	}
+
+	history, err := s.ListMessages(userID, thread.ID)
+	if err != nil {
+		return err
+	}
+	messages := []llm.Message{{
+		Role:    "system",
+		Content: buildSystemPrompt(project.Name, project.Slug, skillCatalog),
+	}}
+	// History already includes the just-saved user message; replace its content for the model if slash-expanded.
+	llmHistory := dbMessagesToLLM(history)
+	if len(llmHistory) > 0 && llmHistory[len(llmHistory)-1].Role == "user" {
+		llmHistory[len(llmHistory)-1].Content = modelUserContent
+	}
+	messages = append(messages, llmHistory...)
 
 	toolCallsUsed := 0
 	for round := 0; round < s.cfg.ChatMaxRounds; round++ {
@@ -216,7 +265,14 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 				args := map[string]any{}
 				_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				emit(Event{Type: "tool_start", Tool: tc.Function.Name, Args: tc.Function.Arguments, ThreadID: thread.ID})
-				result, callErr := s.mcp.CallTool(ctx, endpoint, token, project.Slug, tc.Function.Name, args)
+
+				var result string
+				var callErr error
+				if skills.IsPlatformTool(tc.Function.Name) {
+					result, callErr = s.runSkillTool(tc.Function.Name, args, skillOpts)
+				} else {
+					result, callErr = s.mcp.CallTool(ctx, endpoint, token, project.Slug, tc.Function.Name, args)
+				}
 				if callErr != nil {
 					result = callErr.Error()
 				}
@@ -260,6 +316,111 @@ func (s *Service) Send(ctx context.Context, userID uint, input SendInput, emit f
 	}
 	emit(Event{Type: "error", Error: "max model rounds reached"})
 	return fmt.Errorf("max rounds")
+}
+
+func (s *Service) runSkillTool(name string, args map[string]any, opts skills.ListOptions) (string, error) {
+	switch name {
+	case skills.ToolListSkills:
+		items, err := s.skills.List(opts)
+		if err != nil {
+			return "", err
+		}
+		return skills.ListJSON(items), nil
+	case skills.ToolLoadSkill:
+		raw, _ := args["name"].(string)
+		sk, err := s.skills.Load(raw, opts)
+		if err != nil {
+			return "", err
+		}
+		return skills.LoadJSON(sk), nil
+	default:
+		return "", fmt.Errorf("unknown skill tool %q", name)
+	}
+}
+
+// expandSlashSkills loads skills referenced as /name at the start of tokens.
+// Unknown names are left unchanged. Loaded bodies are appended after the user text.
+func expandSlashSkills(content string, svc *skills.Service, opts skills.ListOptions) string {
+	if svc == nil || strings.TrimSpace(content) == "" {
+		return content
+	}
+	matches := slashSkillRE.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content
+	}
+	seen := map[string]struct{}{}
+	var loaded []string
+	for _, m := range matches {
+		if len(m) < 2 {
+			continue
+		}
+		name := strings.TrimSpace(m[1])
+		name = strings.Trim(name, "/")
+		if name == "" {
+			continue
+		}
+		// Trim trailing punctuation commonly attached in prose.
+		name = strings.TrimRight(name, ".,;:!?）)]}")
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		sk, err := svc.Load(name, opts)
+		if err != nil {
+			continue
+		}
+		seen[key] = struct{}{}
+		loaded = append(loaded, fmt.Sprintf("### Skill: %s (%s)\n\n%s", sk.Name, sk.Scope, sk.Body))
+		// Cap preloaded skills per message.
+		if len(loaded) >= 3 {
+			break
+		}
+	}
+	if len(loaded) == 0 {
+		return content
+	}
+	var b strings.Builder
+	b.WriteString(content)
+	b.WriteString("\n\n---\nSkills loaded via slash command (follow these instructions):\n\n")
+	b.WriteString(strings.Join(loaded, "\n\n"))
+	return b.String()
+}
+
+func buildSystemPrompt(projectName, projectSlug string, catalog []skills.Meta) string {
+	var b strings.Builder
+	b.WriteString("You are an expert AI Coding Agent equipped with MCP coding tools inside an isolated project workspace.\n")
+	b.WriteString(fmt.Sprintf("Current Project: %s (slug: %s)\n", projectName, projectSlug))
+	b.WriteString("GUIDELINES:\n")
+	b.WriteString("1. Always think step-by-step before executing actions.\n")
+	b.WriteString("2. PROACTIVELY invoke available MCP tools (list_dir, list_files, read_file, search_text, apply_patch, exec_command, git_status, git_diff, and related tools) to inspect the workspace, edit code, and run commands.\n")
+	b.WriteString("3. Prefer apply_patch for file edits; use exec_command for builds/tests/shell. Keep edits precise and summarize actions after tool use.\n")
+	b.WriteString("4. When a task matches an available skill description, call load_skill first and follow that skill's instructions.\n")
+	if section := skills.CatalogPrompt(catalog); section != "" {
+		b.WriteString("\n")
+		b.WriteString(section)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func skillToolsToLLM() []llm.ToolDefinition {
+	schemas := skills.MetaToolSchemas()
+	out := make([]llm.ToolDefinition, 0, len(schemas))
+	for _, t := range schemas {
+		params := t.Parameters
+		if len(params) == 0 {
+			params = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		out = append(out, llm.ToolDefinition{
+			Type: "function",
+			Function: llm.ToolFunctionSchema{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  params,
+			},
+		})
+	}
+	return out
 }
 
 func (s *Service) activeProvider() (*models.ModelProvider, string, error) {

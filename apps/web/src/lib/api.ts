@@ -94,6 +94,19 @@ export type GitDiffResult = {
   diffText: string;
 };
 
+export type SkillMeta = {
+  name: string;
+  description: string;
+  scope: "bundled" | "user" | "project" | string;
+  relDir?: string;
+  disableModelInvocation?: boolean;
+};
+
+export type SkillDetail = SkillMeta & {
+  body: string;
+  path?: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -185,6 +198,15 @@ export const api = {
   getProjectGitDiff: (projectId: number, path?: string) =>
     request<GitDiffResult>(
       `/api/v1/projects/${projectId}/git/diff${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+    ),
+  listProjectSkills: (projectId: number) =>
+    request<{ skills: SkillMeta[]; count: number }>(`/api/v1/projects/${projectId}/skills`),
+  getProjectSkill: (projectId: number, name: string) =>
+    request<SkillDetail>(
+      `/api/v1/projects/${projectId}/skills/${name
+        .split("/")
+        .map((p) => encodeURIComponent(p))
+        .join("/")}`,
     ),
 };
 

@@ -5,6 +5,7 @@
 - ⚡ **对齐智谱清言 / OpenAI Codex / Cursor 的现代化沉浸式工作台**
 - 🧠 **大模型深度思考过程 (Reasoning / 思维链)**：流式推送与独立折叠面板
 - 🛠️ **`coding-tools-mcp` 专业级工具可视化**：专属黑底终端控制台、文件 Diff 差异对比、目录检索
+- 🧩 **Agent Skills (`SKILL.md`)**：项目/用户/全局技能包，目录注入 + `load_skill` 按需加载（见 [docs/skills.md](docs/skills.md)）
 - 📂 **项目目录文件树 (File Explorer)**：多级展开折叠、模糊搜索过滤、多彩文件类型图标
 - 🔍 **Monaco 代码预览与 Git 变更 Diff**：VS Code 级代码高亮、Minimap、Git Status 与双栏 DiffEditor
 - 📦 **每用户专属沙箱容器**：多项目按 slug 在容器内隔离执行
@@ -163,6 +164,8 @@ OIDC_REDIRECT_URL=http://localhost:8080/api/v1/auth/oidc/callback
 | GET | `/api/v1/projects/{id}/file?path=...` | **[NEW]** 读取指定文件内容 |
 | GET | `/api/v1/projects/{id}/git/status` | **[NEW]** 获取工作区 Git 状态与变更文件列表 |
 | GET | `/api/v1/projects/{id}/git/diff?path=...` | **[NEW]** 获取特定文件 Git Diff 差异对比 |
+| GET | `/api/v1/projects/{id}/skills` | **[NEW]** 技能包目录（SKILL.md catalog） |
+| GET | `/api/v1/projects/{id}/skills/*` | **[NEW]** 加载指定技能全文 |
 | GET | `/api/v1/runtime` | 用户容器运行态监控 |
 | POST | `/api/v1/runtime/start` | 启动当前用户沙箱容器 |
 | POST | `/api/v1/runtime/stop` | 停止当前用户沙箱容器 |
@@ -191,12 +194,13 @@ coding-agent-platform/
   services/api/             Go API Gateway 与 Agent 调度引擎
     ├── cmd/api/            API 入口
     ├── internal/
-    │   ├── chat/           Agent 思考与工具循环调度引擎
-    │   ├── llm/            OpenAI 兼容协议与思维链解析器
-    │   ├── mcp/            MCP JSON-RPC Client 与项目隔离代理
-    │   ├── projects/       项目管理、文件树遍历与 Git Diff
-    │   ├── runtime/        Docker 用户沙箱容器生命周期管理
-    │   └── models/         GORM 数据库模型定义
+│   ├── chat/           Agent 思考与工具循环调度引擎
+	    │   ├── skills/         SKILL.md 发现 / 解析 / 按需加载
+	    │   ├── llm/            OpenAI 兼容协议与思维链解析器
+	    │   ├── mcp/            MCP JSON-RPC Client 与项目隔离代理
+	    │   ├── projects/       项目管理、文件树遍历与 Git Diff
+	    │   ├── runtime/        Docker 用户沙箱容器生命周期管理
+	    │   └── models/         GORM 数据库模型定义
   deploy/                   Docker Compose 与部署配置
   data/workspaces/          用户项目数据持久化目录
   scripts/                  本地开发快捷启动脚本（内置国内镜像加速）

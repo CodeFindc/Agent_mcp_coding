@@ -97,11 +97,15 @@ func New(
 			r.Post("/chat/send", s.handleChatSend)
 
 			// Project file explorer & git status/diff
-			r.Get("/projects/{id}/files", s.handleListProjectFiles)
-			r.Get("/projects/{id}/file", s.handleReadProjectFile)
-			r.Get("/projects/{id}/git/status", s.handleProjectGitStatus)
-			r.Get("/projects/{id}/git/diff", s.handleProjectGitDiff)
-		})
+r.Get("/projects/{id}/files", s.handleListProjectFiles)
+				r.Get("/projects/{id}/file", s.handleReadProjectFile)
+				r.Get("/projects/{id}/git/status", s.handleProjectGitStatus)
+				r.Get("/projects/{id}/git/diff", s.handleProjectGitDiff)
+
+				r.Get("/projects/{id}/skills", s.handleListProjectSkills)
+				// Wildcard allows nested skill ids (e.g. docs/pr-review).
+				r.Get("/projects/{id}/skills/*", s.handleGetProjectSkill)
+			})
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(s.auth.RequireAdmin)
@@ -373,6 +377,48 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 			emit(chat.Event{Type: "error", Error: err.Error()})
 		}
 	}
+}
+
+func (s *Server) handleListProjectSkills(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	pid, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	items, err := s.chat.ListSkills(user.ID, pid)
+	if err != nil {
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"skills": items, "count": len(items)})
+}
+
+func (s *Server) handleGetProjectSkill(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r.Context())
+	pid, err := pathID(r, "id")
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	name := strings.Trim(chi.URLParam(r, "*"), "/")
+	if name == "" {
+		name = strings.TrimSpace(r.URL.Query().Get("name"))
+	}
+	sk, err := s.chat.GetSkill(user.ID, pid, name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeErr(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "disabled") {
+			writeErr(w, http.StatusForbidden, err.Error())
+			return
+		}
+		writeProjectErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sk)
 }
 
 func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
