@@ -151,8 +151,22 @@ func (c *Client) ChatStream(
 	inThinkTag := false
 	var pendingBuffer string
 
+	type streamResponseChunk struct {
+		Choices []struct {
+			Index int `json:"index"`
+			Delta struct {
+				Role             string            `json:"role,omitempty"`
+				Content          string            `json:"content,omitempty"`
+				Reasoning        string            `json:"reasoning,omitempty"`
+				ReasoningContent string            `json:"reasoning_content,omitempty"`
+				ToolCalls        []openai.ToolCall `json:"tool_calls,omitempty"`
+			} `json:"delta"`
+			FinishReason string `json:"finish_reason,omitempty"`
+		} `json:"choices"`
+	}
+
 	for {
-		response, err := stream.Recv()
+		rawBytes, err := stream.RecvRaw()
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -160,13 +174,18 @@ func (c *Client) ChatStream(
 			return Message{}, "", fmt.Errorf("stream recv: %w", err)
 		}
 
-		if len(response.Choices) == 0 {
+		var chunk streamResponseChunk
+		if err := json.Unmarshal(rawBytes, &chunk); err != nil {
 			continue
 		}
 
-		choice := response.Choices[0]
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+
+		choice := chunk.Choices[0]
 		if choice.FinishReason != "" {
-			finishReason = string(choice.FinishReason)
+			finishReason = choice.FinishReason
 		}
 
 		// 1. Tool Call Delta accumulation
@@ -201,11 +220,15 @@ func (c *Client) ChatStream(
 			}
 		}
 
-		// 2. Reasoning Content streaming (DeepSeek Reasoner / DeepSeek-R1 / OpenAI reasoning)
-		if choice.Delta.ReasoningContent != "" {
-			reasoningBuilder.WriteString(choice.Delta.ReasoningContent)
+		// 2. Reasoning Content streaming (vLLM / GPUStack "reasoning" & DeepSeek "reasoning_content")
+		reasoningChunk := choice.Delta.ReasoningContent
+		if reasoningChunk == "" {
+			reasoningChunk = choice.Delta.Reasoning
+		}
+		if reasoningChunk != "" {
+			reasoningBuilder.WriteString(reasoningChunk)
 			if cb.OnReasoningChunk != nil {
-				cb.OnReasoningChunk(choice.Delta.ReasoningContent)
+				cb.OnReasoningChunk(reasoningChunk)
 			}
 		}
 
