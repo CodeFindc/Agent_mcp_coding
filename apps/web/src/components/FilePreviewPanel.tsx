@@ -112,33 +112,31 @@ export function FilePreviewPanel({
 
   return (
     <aside
-      className={`border-l border-slate-800/80 bg-[#0c0e16] flex flex-col h-full z-30 select-none transition-all duration-300 ${
+      className={`border-l border-white/[0.08] bg-[rgba(10,13,22,0.85)] backdrop-blur-2xl flex flex-col h-full z-30 select-none transition-all duration-300 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.6)] ${
         isFullscreen
-          ? "fixed inset-0 z-50 bg-[#0c0e16]"
+          ? "fixed inset-0 z-50 bg-[#080a10]"
           : "w-[480px] lg:w-[600px] xl:w-[720px] shrink-0"
       }`}
     >
-      {/* Top Bar */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800/80 shrink-0 bg-[#0f111a]">
-        {/* Left: Breadcrumbs and mode badge */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span
-            className={`material-symbols-outlined text-[18px] ${
-              mode === "preview" ? "text-cyan-400" : "text-purple-400"
-            }`}
-          >
-            {mode === "preview" ? "description" : "compare"}
-          </span>
+      {/* Top Bar / Window Header */}
+      <div className="h-14 flex items-center justify-between px-4 border-b border-white/[0.06] shrink-0 bg-[rgba(15,18,30,0.7)] backdrop-blur-xl">
+        {/* Left: Window dots, Breadcrumbs and mode badge */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f56] border border-[#e0443e] inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e] border border-[#dea123] inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f] border border-[#1aab29] inline-block" />
+          </div>
 
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-mono text-xs font-semibold text-slate-200 truncate">
+            <span className="font-mono text-xs font-semibold text-white/90 truncate">
               {filePath}
             </span>
             <span
-              className={`text-[10px] font-mono px-2 py-0.2 rounded-full font-medium shrink-0 ${
+              className={`text-[10px] font-mono px-2 py-0.2 rounded-full font-medium shrink-0 border ${
                 mode === "preview"
-                  ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                  : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                  ? "bg-cyan-500/15 text-cyan-300 border-cyan-400/25"
+                  : "bg-purple-500/15 text-purple-300 border-purple-400/25"
               }`}
             >
               {mode === "preview" ? language : "Git Diff"}
@@ -151,7 +149,7 @@ export function FilePreviewPanel({
           {mode === "diff" && (
             <button
               onClick={() => setRenderSideBySide(!renderSideBySide)}
-              className="px-2 py-1 rounded-lg text-xs font-mono text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition border border-slate-800"
+              className="px-2 py-1 rounded-lg text-xs font-mono text-white/60 hover:text-white hover:bg-white/[0.08] transition border border-white/[0.08]"
               title={renderSideBySide ? "切换为行内对比 (Inline)" : "切换为双栏对比 (Split)"}
             >
               {renderSideBySide ? "Split" : "Inline"}
@@ -160,7 +158,7 @@ export function FilePreviewPanel({
 
           <button
             onClick={copyCode}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition"
+            className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/[0.08] transition"
             title="复制代码"
           >
             <span className="material-symbols-outlined text-[16px]">
@@ -170,7 +168,7 @@ export function FilePreviewPanel({
 
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition"
+            className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/[0.08] transition"
             title={isFullscreen ? "退出全屏" : "全屏预览"}
           >
             <span className="material-symbols-outlined text-[16px]">
@@ -180,7 +178,7 @@ export function FilePreviewPanel({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+            className="p-1.5 rounded-lg text-white/50 hover:text-rose-400 hover:bg-rose-500/10 transition"
             title="关闭预览"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>

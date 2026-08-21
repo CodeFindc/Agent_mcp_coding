@@ -27,27 +27,27 @@ export function ToolCallCard({ tool, args, result }: Props) {
 
   return (
     <div className="w-full my-2">
-      <div className="rounded-xl border border-slate-800 bg-[#0c0e15] overflow-hidden text-xs shadow-sm">
+      <div className="rounded-2xl border border-white/[0.08] bg-[rgba(13,16,26,0.7)] backdrop-blur-xl overflow-hidden text-xs shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]">
         {/* Header */}
         <div
           onClick={() => setExpanded(!expanded)}
-          className={`flex items-center justify-between px-3.5 py-2.5 bg-slate-900/70 hover:bg-slate-900 cursor-pointer select-none transition ${
-            expanded ? "border-b border-slate-800/60" : ""
+          className={`flex items-center justify-between px-3.5 py-2.5 bg-white/[0.03] hover:bg-white/[0.06] cursor-pointer select-none transition ${
+            expanded ? "border-b border-white/[0.06] bg-white/[0.05]" : ""
           }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Tool Icon */}
             <span
-              className={`flex items-center justify-center w-6 h-6 rounded-lg ${meta.bgColor} ${meta.textColor}`}
+              className={`flex items-center justify-center w-6 h-6 rounded-lg ${meta.bgColor} ${meta.textColor} border border-white/10`}
             >
-              <span className="material-symbols-outlined text-[16px]">{meta.icon}</span>
+              <span className="material-symbols-outlined text-[15px]">{meta.icon}</span>
             </span>
 
             {/* Tool Name & target summary */}
             <div className="flex items-center gap-2 min-w-0">
-              <span className="font-mono font-semibold text-slate-200">{tool}</span>
+              <span className="font-mono font-semibold text-white/95">{tool}</span>
               {meta.summary(parsedArgs) && (
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700/50 truncate max-w-xs sm:max-w-md">
+                <span className="font-mono text-[11px] px-2 py-0.5 rounded-md bg-white/[0.06] text-white/60 border border-white/[0.08] truncate max-w-xs sm:max-w-md">
                   {meta.summary(parsedArgs)}
                 </span>
               )}
@@ -55,23 +55,23 @@ export function ToolCallCard({ tool, args, result }: Props) {
 
             {/* Status Badge */}
             {isPending ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full font-medium shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] text-amber-300 bg-amber-400/15 border border-amber-400/25 px-2 py-0.5 rounded-full font-medium shrink-0 shadow-sm">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 执行中
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full font-medium shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300 bg-emerald-400/15 border border-emerald-400/25 px-2 py-0.5 rounded-full font-medium shrink-0 shadow-sm">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 已完成
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 text-slate-500">
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
+          <div className="flex items-center gap-1.5 text-white/40">
+            <span className="text-[11px] text-white/40 hidden sm:inline">
               {expanded ? "收起" : "详情"}
             </span>
-            <span className="material-symbols-outlined text-[18px]">
+            <span className="material-symbols-outlined text-[17px]">
               {expanded ? "expand_less" : "expand_more"}
             </span>
           </div>
@@ -79,13 +79,13 @@ export function ToolCallCard({ tool, args, result }: Props) {
 
         {/* Content Details */}
         {expanded && (
-          <div className="p-3.5 space-y-3 bg-[#08090e] animate-in fade-in-50 duration-200">
+          <div className="p-3.5 space-y-3 bg-[rgba(6,8,14,0.65)] animate-in fade-in-50 duration-200">
             {/* Specific tool parameter view */}
             {renderToolParameters(tool, parsedArgs, args)}
 
             {/* Execution Result */}
             <div>
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1.5 px-0.5">
+              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-white/40 mb-1.5 px-0.5">
                 <span>执行输出 (Output)</span>
                 {result && (
                   <button
@@ -93,7 +93,7 @@ export function ToolCallCard({ tool, args, result }: Props) {
                       e.stopPropagation();
                       copyText(result);
                     }}
-                    className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition"
+                    className="flex items-center gap-1 text-white/50 hover:text-white transition px-2 py-0.5 rounded-md hover:bg-white/[0.08]"
                     title="复制输出"
                   >
                     <span className="material-symbols-outlined text-[13px]">
@@ -105,12 +105,12 @@ export function ToolCallCard({ tool, args, result }: Props) {
               </div>
 
               {isPending ? (
-                <div className="flex items-center gap-2 text-slate-400 py-2.5 px-3 rounded-lg bg-slate-900/40 border border-slate-800/60 font-mono text-xs">
+                <div className="flex items-center gap-2 text-white/50 py-2.5 px-3 rounded-xl bg-white/[0.03] border border-white/[0.06] font-mono text-xs">
                   <span className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
                   <span>正在隔离容器沙箱中执行…</span>
                 </div>
               ) : (
-                <pre className="font-mono text-slate-200 bg-[#05060a] p-3 rounded-lg border border-slate-800/80 overflow-x-auto text-[11px] leading-relaxed max-h-72 whitespace-pre-wrap">
+                <pre className="font-mono text-slate-200 bg-[rgba(4,6,12,0.85)] p-3 rounded-xl border border-white/[0.08] overflow-x-auto text-[11px] leading-relaxed max-h-72 whitespace-pre-wrap shadow-inner">
                   {result || "(无返回输出)"}
                 </pre>
               )}

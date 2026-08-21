@@ -15,30 +15,30 @@ export function RightPanel({ project, runtime, modelLabel, isOpen, onClose }: Pr
   if (!isOpen) return null;
 
   return (
-    <aside className="w-80 shrink-0 border-l border-slate-800/80 bg-[#0d0f17] flex flex-col h-full z-20 select-none animate-in slide-in-from-right-4 duration-200">
+    <aside className="w-80 shrink-0 border-l border-white/[0.08] bg-[rgba(10,13,22,0.8)] backdrop-blur-2xl flex flex-col h-full z-20 select-none animate-in slide-in-from-right-4 duration-200 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.5)]">
       {/* Header */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800/80 shrink-0">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
-          <span className="material-symbols-outlined text-[18px] text-blue-400">
+      <div className="h-14 flex items-center justify-between px-4 border-b border-white/[0.06] shrink-0 bg-white/[0.02]">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/80">
+          <span className="material-symbols-outlined text-[17px] text-blue-400">
             space_dashboard
           </span>
           <span>工作区概览</span>
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition"
+          className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition"
           title="关闭面板"
         >
-          <span className="material-symbols-outlined text-[18px]">close</span>
+          <span className="material-symbols-outlined text-[17px]">close</span>
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
         {/* Runtime Card */}
-        <section className="rounded-xl border border-slate-800/80 bg-[#121520] p-3.5 space-y-3">
+        <section className="rounded-2xl border border-white/[0.08] bg-[rgba(255,255,255,0.035)] backdrop-blur-xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-white/90 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px] text-cyan-400">memory</span>
               运行态容器
             </span>
@@ -60,9 +60,9 @@ export function RightPanel({ project, runtime, modelLabel, isOpen, onClose }: Pr
         </section>
 
         {/* Project Card */}
-        <section className="rounded-xl border border-slate-800/80 bg-[#121520] p-3.5 space-y-3">
+        <section className="rounded-2xl border border-white/[0.08] bg-[rgba(255,255,255,0.035)] backdrop-blur-xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-white/90 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[16px] text-blue-400">folder</span>
               当前项目
             </span>
@@ -76,8 +76,8 @@ export function RightPanel({ project, runtime, modelLabel, isOpen, onClose }: Pr
         </section>
 
         {/* Model Card */}
-        <section className="rounded-xl border border-slate-800/80 bg-[#121520] p-3.5 space-y-3">
-          <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+        <section className="rounded-2xl border border-white/[0.08] bg-[rgba(255,255,255,0.035)] backdrop-blur-xl p-4 space-y-3 shadow-sm">
+          <span className="text-xs font-semibold text-white/90 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[16px] text-purple-400">
               psychology
             </span>
@@ -86,15 +86,15 @@ export function RightPanel({ project, runtime, modelLabel, isOpen, onClose }: Pr
 
           <div className="space-y-2 text-xs">
             <InfoRow label="接入模型" value={modelLabel} />
-            <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
+            <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[11px] text-white/50 leading-relaxed">
               支持在「管理后台」灵活切换模型渠道与 API Key，对话时自动通过 MCP 代理执行容器操作。
             </div>
           </div>
         </section>
 
         {/* Multi-tenant Architecture Tip */}
-        <section className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/15 text-[11px] text-slate-400 leading-relaxed space-y-1.5">
-          <div className="font-medium text-blue-400 flex items-center gap-1">
+        <section className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-400/20 text-[11px] text-white/60 leading-relaxed space-y-1.5 backdrop-blur-sm">
+          <div className="font-medium text-blue-300 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[14px]">info</span>
             用户级容器隔离机制
           </div>
@@ -110,8 +110,8 @@ export function RightPanel({ project, runtime, modelLabel, isOpen, onClose }: Pr
 function InfoRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2">
-      <span className="text-slate-400 shrink-0">{label}</span>
-      <span className={`text-right text-slate-200 break-all font-medium ${mono ? "font-mono text-[11px]" : ""}`}>
+      <span className="text-white/40 shrink-0">{label}</span>
+      <span className={`text-right text-white/80 break-all font-medium ${mono ? "font-mono text-[11px]" : ""}`}>
         {value}
       </span>
     </div>
@@ -119,30 +119,30 @@ function InfoRow({ label, value, mono }: { label: string; value: ReactNode; mono
 }
 
 function StatusBadge({ runtime }: { runtime: RuntimeStatus | null }) {
-  if (!runtime) return <span className="text-[11px] text-slate-400">未知</span>;
+  if (!runtime) return <span className="text-[11px] text-white/40">未知</span>;
   if (runtime.status === "running" && runtime.mcpReady)
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium">
+      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-400/25 font-medium shadow-sm">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         运行中
       </span>
     );
   if (runtime.status === "running")
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-500/20 font-medium">
+      <span className="inline-flex items-center gap-1 text-[11px] text-cyan-300 bg-cyan-500/15 px-2 py-0.5 rounded-full border border-cyan-400/25 font-medium shadow-sm">
         <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
         容器就绪
       </span>
     );
   if (runtime.status === "starting")
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium">
+      <span className="inline-flex items-center gap-1 text-[11px] text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-400/25 font-medium shadow-sm">
         <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
         启动中
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 font-medium">
+    <span className="inline-flex items-center gap-1 text-[11px] text-white/40 bg-white/[0.06] px-2 py-0.5 rounded-full border border-white/[0.08] font-medium">
       已停止
     </span>
   );

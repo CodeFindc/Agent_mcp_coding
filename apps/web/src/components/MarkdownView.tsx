@@ -31,21 +31,29 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   }
 
   return (
-    <div className="code-block-wrapper my-2.5">
-      <div className="code-block-header">
-        <span className="font-mono text-xs text-slate-400">{language || "code"}</span>
+    <div className="code-block-wrapper my-3 rounded-2xl border border-white/[0.1] bg-[rgba(8,10,18,0.85)] backdrop-blur-xl overflow-hidden shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]">
+      <div className="code-block-header flex items-center justify-between px-3.5 py-2 bg-white/[0.035] border-b border-white/[0.06] select-none">
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f56] border border-[#e0443e] inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e] border border-[#dea123] inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f] border border-[#1aab29] inline-block" />
+          </div>
+          <span className="font-mono text-xs text-white/50">{language || "text"}</span>
+        </div>
+
         <button
           onClick={copyCode}
-          className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-white transition px-2 py-0.5 rounded hover:bg-white/5"
-          title="复制"
+          className="flex items-center gap-1.5 text-[11px] text-white/50 hover:text-white transition px-2 py-0.5 rounded-md hover:bg-white/[0.08]"
+          title="复制代码"
         >
-          <span className="material-symbols-outlined text-[14px]">
+          <span className="material-symbols-outlined text-[13px]">
             {copied ? "check" : "content_copy"}
           </span>
           <span>{copied ? "已复制" : "复制"}</span>
         </button>
       </div>
-      <pre className="code-block-content text-xs font-mono">{code}</pre>
+      <pre className="code-block-content p-3.5 overflow-x-auto text-xs font-mono leading-relaxed text-slate-200">{code}</pre>
     </div>
   );
 }

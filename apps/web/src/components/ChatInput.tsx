@@ -95,12 +95,16 @@ export function ChatInput({
     <div className="w-full max-w-4xl mx-auto px-4 pb-4">
       <form
         onSubmit={submit}
-        className="relative rounded-2xl border border-slate-800 bg-[#121520]/90 backdrop-blur-xl shadow-2xl transition-all duration-200 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20"
+        className="relative rounded-2xl border border-white/[0.12] bg-[rgba(16,20,32,0.78)] backdrop-blur-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 focus-within:border-blue-500/60 focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:shadow-[0_0_30px_rgba(59,130,246,0.15),0_20px_50px_-10px_rgba(0,0,0,0.6)]"
       >
         {showMenu && (
-          <div className="absolute left-3 right-3 bottom-full mb-2 z-20 rounded-xl border border-slate-700/80 bg-[#0c0e15] shadow-2xl overflow-hidden">
-            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-800 font-mono">
-              Skills · /name
+          <div className="absolute left-3 right-3 bottom-full mb-2.5 z-20 rounded-2xl border border-white/[0.12] bg-[rgba(12,15,25,0.88)] backdrop-blur-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.7)] overflow-hidden animate-in fade-in-50 slide-in-from-bottom-2 duration-150">
+            <div className="px-3.5 py-2 text-[10px] uppercase tracking-wider text-white/40 border-b border-white/[0.06] font-mono flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[13px] text-fuchsia-400">auto_awesome</span>
+                <span>可用技能 · Skills</span>
+              </span>
+              <span className="text-[10px] text-white/30 lowercase">↑↓ 选择 · Tab/Enter 确认</span>
             </div>
             <ul className="max-h-56 overflow-y-auto py-1">
               {filtered.map((s, i) => (
@@ -111,19 +115,19 @@ export function ChatInput({
                       e.preventDefault();
                       applySkill(s.name);
                     }}
-                    className={`w-full text-left px-3 py-2 flex flex-col gap-0.5 transition ${
-                      i === activeIdx ? "bg-blue-600/20 text-slate-100" : "hover:bg-slate-800/80 text-slate-300"
+                    className={`w-full text-left px-3.5 py-2 flex flex-col gap-0.5 transition ${
+                      i === activeIdx ? "bg-blue-500/20 text-white" : "hover:bg-white/[0.05] text-white/80"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="material-symbols-outlined text-[14px] text-fuchsia-300">auto_awesome</span>
-                      <span className="font-mono text-xs font-semibold truncate">/{s.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 border border-slate-700/60 shrink-0">
+                      <span className="font-mono text-xs font-semibold text-white truncate">/{s.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/[0.08] text-white/50 border border-white/[0.08] shrink-0 font-mono">
                         {s.scope}
                       </span>
                     </div>
                     {s.description && (
-                      <span className="text-[11px] text-slate-500 line-clamp-2 pl-6">{s.description}</span>
+                      <span className="text-[11px] text-white/50 line-clamp-1 pl-6 font-normal">{s.description}</span>
                     )}
                   </button>
                 </li>
@@ -136,7 +140,7 @@ export function ChatInput({
           <textarea
             ref={textareaRef}
             rows={1}
-            className="w-full bg-transparent resize-none text-[13.5px] text-slate-100 placeholder-slate-500 focus:outline-none max-h-48 leading-relaxed font-sans"
+            className="w-full bg-transparent resize-none text-[13.5px] text-white placeholder-white/40 focus:outline-none max-h-48 leading-relaxed font-sans"
             placeholder={placeholder || "问点什么，输入 / 选择 skill…"}
             value={value}
             disabled={disabled}
@@ -186,20 +190,20 @@ export function ChatInput({
           />
         </div>
 
-        <div className="flex items-center justify-between px-3 py-2 border-t border-slate-800/60 text-xs text-slate-400">
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-t border-white/[0.06] text-xs text-white/50">
           <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/50 text-slate-300 text-[11px] font-medium select-none shadow-sm">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] border border-white/[0.08] text-white/80 text-[11px] font-medium select-none shadow-sm backdrop-blur-md">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
               <span className="max-w-[140px] truncate">{modelLabel}</span>
             </div>
 
-            <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/40 text-slate-400 text-[11px] select-none border border-slate-800">
+            <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.03] text-white/50 text-[11px] select-none border border-white/[0.06]">
               <span className="material-symbols-outlined text-[13px] text-cyan-400">bolt</span>
               <span>MCP Tools</span>
             </div>
 
             {skills.length > 0 && (
-              <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-fuchsia-500/10 text-fuchsia-300/90 text-[11px] select-none border border-fuchsia-500/20">
+              <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-fuchsia-500/10 text-fuchsia-300 text-[11px] select-none border border-fuchsia-500/20">
                 <span className="material-symbols-outlined text-[13px]">auto_awesome</span>
                 <span>{skills.length} skills · /</span>
               </div>
@@ -207,8 +211,8 @@ export function ChatInput({
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="hidden md:inline text-[11px] text-slate-500 select-none">
-              ↵ 发送 &bull; Shift + ↵ 换行 &bull; / skill
+            <span className="hidden md:inline text-[11px] text-white/30 select-none">
+              ↵ 发送 · Shift + ↵ 换行 · / skill
             </span>
 
             <button
@@ -216,8 +220,8 @@ export function ChatInput({
               disabled={disabled || busy || !value.trim()}
               className={`w-8 h-8 rounded-xl flex items-center justify-center transition duration-150 ${
                 value.trim() && !busy && !disabled
-                  ? "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 cursor-pointer active:scale-95"
-                  : "bg-slate-800/80 text-slate-500 cursor-not-allowed"
+                  ? "bg-gradient-to-tr from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/30 cursor-pointer active:scale-95 border border-white/20"
+                  : "bg-white/[0.06] text-white/20 cursor-not-allowed border border-white/[0.04]"
               }`}
               title="发送"
             >
@@ -230,8 +234,8 @@ export function ChatInput({
           </div>
         </div>
       </form>
-      <div className="text-center mt-2 text-[11px] text-slate-500">
-        AI 可能会生成有偏差的代码，请在关键生产环境中进行校验与测试。
+      <div className="text-center mt-2 text-[11px] text-white/30 tracking-tight">
+        AI 生成代码仅供参考，请在关键生产环境中进行校验与测试
       </div>
     </div>
   );

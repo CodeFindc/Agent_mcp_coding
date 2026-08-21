@@ -99,12 +99,12 @@ export function FileTreeDrawer({
   const changeCount = gitStatus?.changes?.length || 0;
 
   return (
-    <aside className="w-72 shrink-0 border-r border-slate-800/80 bg-[#0c0e16] flex flex-col h-full z-25 select-none animate-in slide-in-from-left-4 duration-200">
+    <aside className="w-72 shrink-0 border-r border-white/[0.08] bg-[rgba(10,13,22,0.75)] backdrop-blur-2xl flex flex-col h-full z-25 select-none animate-in slide-in-from-left-4 duration-200 shadow-[inset_-1px_0_0_rgba(255,255,255,0.03)]">
       {/* Header */}
-      <div className="h-14 flex items-center justify-between px-3.5 border-b border-slate-800/80 shrink-0">
+      <div className="h-14 flex items-center justify-between px-3.5 border-b border-white/[0.06] shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="material-symbols-outlined text-[18px] text-cyan-400">folder_open</span>
-          <span className="font-semibold text-xs text-slate-200 truncate">
+          <span className="material-symbols-outlined text-[17px] text-cyan-400">folder_open</span>
+          <span className="font-semibold text-xs text-white/90 truncate">
             {projectName || "项目文件"}
           </span>
         </div>
@@ -112,7 +112,7 @@ export function FileTreeDrawer({
           <button
             onClick={refresh}
             disabled={loading}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition"
+            className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition"
             title="刷新目录"
           >
             <span
@@ -125,7 +125,7 @@ export function FileTreeDrawer({
           </button>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition"
+            className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition"
             title="收起目录"
           >
             <span className="material-symbols-outlined text-[16px]">chevron_left</span>
@@ -133,14 +133,14 @@ export function FileTreeDrawer({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center border-b border-slate-800/60 px-2 py-1.5 gap-1 shrink-0 bg-slate-950/40">
+      {/* Segmented Control Tabs */}
+      <div className="flex items-center border-b border-white/[0.06] p-1.5 gap-1 shrink-0 bg-black/20">
         <button
           onClick={() => setActiveTab("files")}
-          className={`flex-1 py-1 px-2 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-1 px-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
             activeTab === "files"
-              ? "bg-slate-800 text-slate-100 shadow-sm"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-white/[0.1] text-white shadow-sm border border-white/[0.1]"
+              : "text-white/50 hover:text-white/80"
           }`}
         >
           <span className="material-symbols-outlined text-[14px]">account_tree</span>
@@ -149,16 +149,16 @@ export function FileTreeDrawer({
 
         <button
           onClick={() => setActiveTab("git")}
-          className={`flex-1 py-1 px-2 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-1 px-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
             activeTab === "git"
-              ? "bg-slate-800 text-slate-100 shadow-sm"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-white/[0.1] text-white shadow-sm border border-white/[0.1]"
+              : "text-white/50 hover:text-white/80"
           }`}
         >
           <span className="material-symbols-outlined text-[14px]">history</span>
           <span>Git 变更</span>
           {changeCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/20 text-blue-400 font-bold">
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500/25 text-blue-300 font-bold border border-blue-400/30">
               {changeCount}
             </span>
           )}
@@ -167,9 +167,9 @@ export function FileTreeDrawer({
 
       {/* Search Input in Files Tab */}
       {activeTab === "files" && (
-        <div className="p-2 border-b border-slate-800/40 shrink-0">
+        <div className="p-2 border-b border-white/[0.06] shrink-0">
           <div className="relative">
-            <span className="material-symbols-outlined text-[14px] text-slate-500 absolute left-2.5 top-2">
+            <span className="material-symbols-outlined text-[14px] text-white/30 absolute left-2.5 top-2">
               search
             </span>
             <input
@@ -177,7 +177,7 @@ export function FileTreeDrawer({
               placeholder="搜索文件名…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#07080d] border border-slate-800 rounded-lg pl-8 pr-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 placeholder-slate-500"
+              className="w-full glass-input rounded-lg pl-8 pr-2.5 py-1 text-xs text-white focus:outline-none placeholder-white/30"
             />
           </div>
         </div>
@@ -186,13 +186,13 @@ export function FileTreeDrawer({
       {/* Body Content */}
       <div className="flex-1 overflow-y-auto p-2 min-h-0">
         {error && (
-          <div className="p-2 text-xs text-rose-400 bg-rose-500/10 rounded-lg mb-2">
+          <div className="p-2.5 text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl mb-2">
             {error}
           </div>
         )}
 
         {loading && !files.length ? (
-          <div className="flex items-center justify-center py-8 text-xs text-slate-500 gap-2">
+          <div className="flex items-center justify-center py-8 text-xs text-white/40 gap-2">
             <span className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
             <span>加载目录中…</span>
           </div>
@@ -210,14 +210,14 @@ export function FileTreeDrawer({
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-xs text-slate-500">
+            <div className="text-center py-8 text-xs text-white/40">
               {searchQuery ? "未找到匹配文件" : "目录为空"}
             </div>
           )
         ) : (
           /* Git Status Tab */
           <div className="space-y-3">
-            <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-slate-900/60 border border-slate-800/60 text-xs text-slate-300">
+            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs text-white/80">
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[15px] text-purple-400">commit</span>
                 <span>当前分支:</span>
@@ -227,30 +227,30 @@ export function FileTreeDrawer({
 
             {gitStatus?.changes && gitStatus.changes.length > 0 ? (
               <div className="space-y-1">
-                <div className="text-[11px] font-semibold text-slate-400 px-2 tracking-wider uppercase">
+                <div className="text-[10px] font-semibold text-white/40 px-2 tracking-wider uppercase">
                   变更文件 ({gitStatus.changes.length})
                 </div>
                 {gitStatus.changes.map((c) => (
                   <button
                     key={c.path}
                     onClick={() => onSelectDiff(c.path)}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between hover:bg-slate-800/80 transition group"
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between hover:bg-white/[0.06] transition group"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="material-symbols-outlined text-[15px] text-slate-500 group-hover:text-slate-300">
+                      <span className="material-symbols-outlined text-[15px] text-white/40 group-hover:text-white/70">
                         description
                       </span>
-                      <span className="truncate text-slate-200 group-hover:text-white font-mono text-[11px]">
+                      <span className="truncate text-white/80 group-hover:text-white font-mono text-[11px]">
                         {c.path}
                       </span>
                     </div>
                     <span
-                      className={`font-mono text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                      className={`font-mono text-[10px] font-bold px-1.5 py-0.2 rounded-md shrink-0 border ${
                         c.status === "M"
-                          ? "bg-amber-500/20 text-amber-400"
+                          ? "bg-amber-500/15 text-amber-300 border-amber-400/25"
                           : c.status === "A" || c.status === "?"
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-rose-500/20 text-rose-400"
+                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-400/25"
+                            : "bg-rose-500/15 text-rose-300 border-rose-400/25"
                       }`}
                     >
                       {c.status}
@@ -259,8 +259,8 @@ export function FileTreeDrawer({
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-xs text-slate-500 flex flex-col items-center gap-1">
-                <span className="material-symbols-outlined text-[24px] text-emerald-400/60">
+              <div className="text-center py-8 text-xs text-white/40 flex flex-col items-center gap-1.5">
+                <span className="material-symbols-outlined text-[24px] text-emerald-400/70">
                   check_circle
                 </span>
                 <span>工作区很干净，无待提交变更</span>
@@ -294,9 +294,9 @@ function TreeNode({
         <button
           onClick={() => setExpanded(!expanded)}
           style={{ paddingLeft: `${depth * 12 + 8}px` }}
-          className="w-full text-left py-1 pr-2 rounded-lg text-xs flex items-center gap-1.5 text-slate-300 hover:bg-slate-800/60 hover:text-white transition group"
+          className="w-full text-left py-1 pr-2 rounded-lg text-xs flex items-center gap-1.5 text-white/70 hover:bg-white/[0.05] hover:text-white transition group"
         >
-          <span className="material-symbols-outlined text-[14px] text-slate-500 group-hover:text-slate-400">
+          <span className="material-symbols-outlined text-[14px] text-white/40 group-hover:text-white/60">
             {expanded ? "expand_more" : "chevron_right"}
           </span>
           <span className="material-symbols-outlined text-[15px] text-amber-400">
@@ -329,10 +329,10 @@ function TreeNode({
     <button
       onClick={() => onSelectFile(node.path)}
       style={{ paddingLeft: `${depth * 12 + 20}px` }}
-      className={`w-full text-left py-1 pr-2 rounded-lg text-xs flex items-center justify-between transition ${
+      className={`w-full text-left py-1 pr-2 rounded-lg text-xs flex items-center justify-between transition-all ${
         isSelected
-          ? "bg-blue-600/20 text-cyan-300 font-medium border border-blue-500/30"
-          : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+          ? "bg-blue-500/20 text-cyan-300 font-medium border border-blue-400/30 shadow-sm"
+          : "text-white/70 hover:bg-white/[0.05] hover:text-white"
       }`}
     >
       <div className="flex items-center gap-1.5 min-w-0">
@@ -341,7 +341,7 @@ function TreeNode({
         </span>
         <span className="truncate font-mono text-[11.5px]">{node.name}</span>
       </div>
-      <span className="text-[10px] text-slate-400 opacity-60 font-mono ml-2 shrink-0">
+      <span className="text-[10px] text-white/30 font-mono ml-2 shrink-0">
         {formatSize(node.size)}
       </span>
     </button>

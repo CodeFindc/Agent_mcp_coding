@@ -406,15 +406,15 @@ export default function HomePage() {
 
   if (!user) {
     return (
-      <main className="h-screen w-screen flex flex-col items-center justify-center bg-[#0a0b10] text-slate-400 gap-3">
+      <main className="h-screen w-screen flex flex-col items-center justify-center bg-[#06070a] text-white/50 gap-3">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs tracking-wider">正在加载工作区…</span>
+        <span className="text-xs tracking-wider font-medium">正在进入 macOS 工作区…</span>
       </main>
     );
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-[#0a0b10] text-slate-100">
+    <div className="h-screen w-screen overflow-hidden flex bg-transparent text-white/95">
       {/* Col 1: Left Sidebar */}
       <Sidebar
         user={user}
@@ -436,7 +436,7 @@ export default function HomePage() {
         isFileTreeOpen={isFileTreeOpen}
       />
 
-      {/* Col 2: Project File Tree Drawer (toggled by 查看文件 like Zhipu) */}
+      {/* Col 2: Project File Tree Drawer */}
       <FileTreeDrawer
         projectId={selectedProjectId}
         projectName={selectedProject?.name}
@@ -468,17 +468,17 @@ export default function HomePage() {
 
         <div className="flex-1 flex overflow-hidden min-h-0 relative">
           {/* Col 3: Chat Stream & Interaction */}
-          <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-[#090a0f]">
+          <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-transparent">
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0">
               {error ? (
-                <div className="w-full max-w-4xl mx-auto rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300 flex items-center justify-between">
+                <div className="w-full max-w-4xl mx-auto rounded-2xl border border-rose-500/30 bg-rose-500/10 backdrop-blur-xl px-4 py-3 text-xs text-rose-300 flex items-center justify-between shadow-lg">
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[16px]">error</span>
                     <span>{error}</span>
                   </div>
                   <button
                     onClick={() => setError("")}
-                    className="hover:text-white p-1"
+                    className="hover:text-white p-1 rounded-md hover:bg-white/10 transition"
                   >
                     <span className="material-symbols-outlined text-[14px]">close</span>
                   </button>
@@ -488,35 +488,37 @@ export default function HomePage() {
               {messages.length > 0 ? (
                 messages.map((m, idx) => <MessageBubble key={idx} msg={m} />)
               ) : (
-                /* Welcome Hero Screen */
+                /* Welcome Hero Screen (Spotlight / Raycast Style) */
                 <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto px-4 text-center my-auto py-8">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-xl shadow-blue-500/20 mb-5">
-                    <span className="material-symbols-outlined text-[28px]">smart_toy</span>
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-2xl shadow-blue-500/25 mb-5 border border-white/25">
+                    <span className="material-symbols-outlined text-[32px]">smart_toy</span>
                   </div>
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2">
                     你好，{user.name || "开发者"}
                   </h2>
-                  <p className="text-xs sm:text-sm text-slate-400 max-w-lg mb-8 leading-relaxed">
-                    这是专为你配置的云端 AI 编程工作区。每个会话均配备专属沙箱与 MCP 工具链，为你提供自动化代码分析、构建与调试能力。
+                  <p className="text-xs sm:text-sm text-white/50 max-w-lg mb-8 leading-relaxed font-normal">
+                    这是专为你打造的 macOS 磨砂玻璃云端编程工作区。每个会话均配备专属沙箱容器与 MCP 编程工具链。
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full text-left">
                     {STARTER_PROMPTS.map((item, idx) => (
                       <button
                         key={idx}
                         onClick={() => {
                           setInput(item.prompt);
                         }}
-                        className="p-3.5 rounded-xl border border-slate-800/90 bg-[#11141e]/70 hover:bg-[#161a27] hover:border-slate-700 transition-all text-left group shadow-sm flex items-start gap-3"
+                        className="p-4 rounded-2xl border border-white/[0.08] bg-[rgba(18,22,34,0.65)] hover:bg-[rgba(26,32,48,0.75)] hover:border-white/[0.16] hover:shadow-[0_12px_24px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-all duration-200 text-left group flex items-start gap-3.5 cursor-pointer active:scale-[0.99]"
                       >
-                        <span className="material-symbols-outlined text-[20px] text-blue-400 group-hover:text-cyan-400 transition mt-0.5">
-                          {item.icon}
-                        </span>
-                        <div>
-                          <div className="text-xs font-semibold text-slate-200 group-hover:text-white transition">
+                        <div className="w-8 h-8 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-blue-400 group-hover:text-cyan-300 group-hover:bg-cyan-500/10 group-hover:border-cyan-400/30 transition shrink-0">
+                          <span className="material-symbols-outlined text-[18px]">
+                            {item.icon}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-white/90 group-hover:text-white transition">
                             {item.title}
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                          <div className="text-[11px] text-white/40 mt-0.5 line-clamp-1">
                             {item.desc}
                           </div>
                         </div>
@@ -527,8 +529,8 @@ export default function HomePage() {
               )}
 
               {statusText ? (
-                <div className="w-full max-w-4xl mx-auto px-4 py-1.5 text-xs text-slate-400 flex items-center gap-2 animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                <div className="w-full max-w-4xl mx-auto px-4 py-1.5 text-xs text-white/60 flex items-center gap-2 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.9)]" />
                   <span>{statusText}</span>
                 </div>
               ) : null}
