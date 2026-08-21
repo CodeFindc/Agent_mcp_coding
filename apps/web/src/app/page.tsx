@@ -2,10 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChatInput } from "@/components/ChatInput";
-import { FilePreviewPanel } from "@/components/FilePreviewPanel";
-import { FileTreeDrawer } from "@/components/FileTreeDrawer";
-import { MessageBubble, UiMsg } from "@/components/MessageBubble";
+import { Composer } from "@/components/Composer";
+import { TrajectorySurface } from "@/components/TrajectorySurface";
 import { RightPanel } from "@/components/RightPanel";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
@@ -66,11 +64,7 @@ export default function HomePage() {
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFileTreeOpen, setIsFileTreeOpen] = useState(false);
-  const [previewInfo, setPreviewInfo] = useState<{
-    path: string;
-    mode: "preview" | "diff";
-  } | null>(null);
-  const [skills, setSkills] = useState<SkillMeta[]>([]);
+  const [showTrajectory, setShowTrajectory] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -535,24 +529,89 @@ export default function HomePage() {
                 </div>
               ) : null}
 
+          {/* Col 3: Chat Stream & Interaction */}
+          <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-transparent">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0">
+              {error ? (
+                <div className="w-full max-w-4xl mx-auto rounded-2xl border border-rose-500/30 bg-rose-500/10 backdrop-blur-xl px-4 py-3 text-xs text-rose-300 flex items-center justify-between shadow-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">error</span>
+                    <span>{error}</span>
+                  </div>
+                  <button
+                    onClick={() => setError("")}
+                    className="hover:text-white p-1 rounded-md hover:bg-white/10 transition"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </div>
+              ) : null}
+
+              {messages.length > 0 ? (
+                messages.map((m, idx) => <MessageBubble key={idx} msg={m} />)
+              ) : (
+                /* Welcome Hero Screen (Spotlight / Raycast Style) */
+                <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto px-4 text-center my-auto py-8">
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-2xl shadow-blue-500/25 mb-5 border border-white/25">
+                    <span className="material-symbols-outlined text-[32px]">smart_toy</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2">
+                    你好，{user.name || "开发者"}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-white/50 max-w-lg mb-8 leading-relaxed font-normal">
+                    这是专为你打造的 macOS 磨砂玻璃云端编程工作区。每个会话均配备专属沙箱容器与 MCP 编程工具链。
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full text-left">
+                    {STARTER_PROMPTS.map((item, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setInput(item.prompt);
+                        }}
+                        className="p-4 rounded-2xl border border-white/[0.08] bg-[rgba(18,22,34,0.65)] hover:bg-[rgba(26,32,48,0.75)] hover:border-white/[0.16] hover:shadow-[0_12px_24px_-8px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-all duration-200 text-left group flex items-start gap-3.5 cursor-pointer active:scale-[0.99]"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-blue-400 group-hover:text-cyan-300 group-hover:bg-cyan-500/10 group-hover:border-cyan-400/30 transition shrink-0">
+                          <span className="material-symbols-outlined text-[18px]">
+                            {item.icon}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-white/90 group-hover:text-white transition">
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-white/40 mt-0.5 line-clamp-1">
+                            {item.desc}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {statusText ? (
+                <div className="w-full max-w-4xl mx-auto px-4 py-1.5 text-xs text-white/60 flex items-center gap-2 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.9)]" />
+                  <span>{statusText}</span>
+                </div>
+              ) : null}
+
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Floating Chat Input */}
-            <ChatInput
+            {/* Composer - LiveAgent style, at bottom */}
+            <Composer
               value={input}
               onChange={setInput}
               onSend={() => doSend(input)}
               disabled={!selectedProjectId}
               busy={busy}
-              placeholder={
-                selectedProject
-                  ? `在「${selectedProject.name}」中提问，输入 / 选择 skill…`
-                  : "请先在左侧选择或创建项目"
-              }
+              placeholder={selectedProject ? `在「${selectedProject.name}」中提问，输入 / 选择 skill…` : "请先在左侧选择或创建项目"}
               modelLabel={modelLabel}
               skills={skills}
             />
+          </main>
           </main>
 
           {/* Col 4: Rightmost Panel: Code Preview / Diff Viewer */}
