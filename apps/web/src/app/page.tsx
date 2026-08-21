@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "@/components/Composer";
 import { TrajectorySurface } from "@/components/TrajectorySurface";
+import { FilePreviewPanel } from "@/components/FilePreviewPanel";
+import { FileTreeDrawer } from "@/components/FileTreeDrawer";
+import { MessageBubble, UiMsg } from "@/components/MessageBubble";
 import { RightPanel } from "@/components/RightPanel";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
@@ -64,7 +67,12 @@ export default function HomePage() {
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFileTreeOpen, setIsFileTreeOpen] = useState(false);
+  const [previewInfo, setPreviewInfo] = useState<{
+    path: string;
+    mode: "preview" | "diff";
+  } | null>(null);
   const [showTrajectory, setShowTrajectory] = useState(false);
+  const [skills, setSkills] = useState<SkillMeta[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

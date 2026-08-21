@@ -1,13 +1,18 @@
 "use client";
 
 import { MarkdownView } from "./MarkdownView";
-import { MessageBubble } from "./MessageBubble";
 import { ThinkingProcess } from "./ThinkingProcess";
-import { ToolCallCard } from "./ToolCallCard";
+
+export type TrajectoryMsg = {
+  kind: string;
+  content?: string | null;
+  reasoning?: string | null;
+  tool?: string;
+};
 
 type TrajectorySurfaceProps = {
-  messages: any[]; // UiMsg[]
-  onMessageClick?: (msg: any) => void;
+  messages: TrajectoryMsg[];
+  onMessageClick?: (msg: TrajectoryMsg) => void;
 };
 
 export function TrajectorySurface({ messages = [], onMessageClick }: TrajectorySurfaceProps) {

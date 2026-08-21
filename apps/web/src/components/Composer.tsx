@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useState } from "react";
+import type { SkillMeta } from "@/lib/api";
 import { ChatInput } from "./ChatInput"; // Reuse existing input logic for skills, streaming, etc.
 
 type ComposerProps = {
@@ -11,7 +12,7 @@ type ComposerProps = {
   busy?: boolean;
   placeholder?: string;
   modelLabel: string;
-  skills?: any[]; // SkillMeta
+  skills?: SkillMeta[];
   onAttach?: () => void;
   onModelChange?: () => void;
 };
@@ -29,7 +30,7 @@ export function Composer({
   onModelChange,
 }: ComposerProps) {
   const [showAttachments, setShowAttachments] = useState(false);
-  const [isComposing, setIsComposing] = useState(false);
+  const [isComposing] = useState(false);
 
   // Reuse ChatInput but wrap it in a nicer composer wrapper with LiveAgent style
   return (
